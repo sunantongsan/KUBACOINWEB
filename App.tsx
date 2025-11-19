@@ -1,4 +1,3 @@
-
 import React, { useState, useEffect } from 'react';
 import { ViewState, TokenData, NetworkMode, LaunchpadProject, ChainType } from './types';
 import { TokenCreator } from './components/TokenCreator';
@@ -7,8 +6,11 @@ import { AiAssistant } from './components/AiAssistant';
 import { Launchpad } from './components/Launchpad';
 import { TradeInterface } from './components/TradeInterface';
 import { TokenQualityBadge } from './components/TokenQualityBadge';
-import { LayoutGrid, PlusCircle, Wallet, Layers, Rocket, TrendingUp, Flame, ArrowRight, Search, X, CheckCircle2, LogOut, Loader2 } from 'lucide-react';
+import { LayoutGrid, PlusCircle, Wallet, Layers, Rocket, TrendingUp, LogOut, Loader2, Search, X, Zap, ToggleLeft, ToggleRight } from 'lucide-react';
 import { CHAIN_CONFIG } from './constants';
+
+// REAL WEB3 IMPORTS
+import { useAccount, useConnect, useDisconnect } from 'wagmi';
 
 // Helper to parse dates from JSON
 const dateReviver = (key: string, value: any) => {
@@ -51,10 +53,26 @@ function App() {
   const [marketTokens, setMarketTokens] = useState<TokenData[]>([]);
 
   // WALLET STATE
+  const [isSimulationMode, setIsSimulationMode] = useState(true); // Default to Simulation
   const [walletAddress, setWalletAddress] = useState<string | null>(null);
   const [walletChain, setWalletChain] = useState<ChainType | null>(null);
   const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
   const [isConnecting, setIsConnecting] = useState(false);
+
+  // REAL WEB3 HOOKS
+  const { address: realAddress, isConnected: isRealConnected } = useAccount();
+  const { connect: connectReal, connectors } = useConnect();
+  const { disconnect: disconnectReal } = useDisconnect();
+
+  // Effect to sync Real Wallet state
+  useEffect(() => {
+    if (!isSimulationMode && isRealConnected && realAddress) {
+      setWalletAddress(realAddress);
+      setWalletChain(ChainType.BNB); // Defaulting to BNB for initial integration
+    } else if (!isSimulationMode && !isRealConnected) {
+      setWalletAddress(null);
+    }
+  }, [isRealConnected, realAddress, isSimulationMode]);
 
   // Persist Data whenever it changes
   useEffect(() => {
@@ -128,7 +146,6 @@ function App() {
   const handleUpdateToken = (updatedToken: TokenData) => {
     const updatedList = myTokens.map(t => t.id === updatedToken.id ? updatedToken : t);
     setMyTokens(updatedList);
-    // Explicitly save to ensure sync immediately
     localStorage.setItem('kuba_my_tokens', JSON.stringify(updatedList));
     
     if (selectedToken && selectedToken.id === updatedToken.id) {
@@ -143,24 +160,42 @@ function App() {
   // Wallet Functions
   const handleConnect = async (chain: ChainType) => {
       setIsConnecting(true);
-      
-      // Simulate delay
-      await new Promise(resolve => setTimeout(resolve, 1000));
 
-      setWalletChain(chain);
+      if (!isSimulationMode) {
+        // REAL WALLET CONNECTION
+        const connector = connectors[0]; // Usually Injected (MetaMask)
+        if (connector) {
+            try {
+                connectReal({ connector });
+                // State update handled by useEffect
+            } catch (error) {
+                console.error("Real connection failed", error);
+                alert("Failed to connect real wallet. Make sure you have MetaMask installed.");
+            }
+        } else {
+            alert("No wallet found. Please install MetaMask.");
+        }
+        setIsConnecting(false);
+        setIsConnectModalOpen(false);
+        return;
+      }
       
-      // Generate a mock address based on chain
+      // SIMULATION CONNECTION
+      await new Promise(resolve => setTimeout(resolve, 1000));
+      setWalletChain(chain);
       let mockAddr = "";
       if(chain === ChainType.BNB) mockAddr = "0x71C...9A21";
       if(chain === ChainType.SOL) mockAddr = "AuX...9k2P";
       if(chain === ChainType.TON) mockAddr = "EQD...j82Z";
-      
       setWalletAddress(mockAddr);
       setIsConnecting(false);
       setIsConnectModalOpen(false);
   };
 
   const handleDisconnect = () => {
+      if (!isSimulationMode) {
+          disconnectReal();
+      }
       setWalletAddress(null);
       setWalletChain(null);
   };
@@ -237,7 +272,9 @@ function App() {
                     className="flex items-center gap-2 bg-slate-800 hover:bg-red-900/50 border border-green-500/50 hover:border-red-500/50 px-4 py-2 rounded-full transition-all group"
                  >
                     <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span className="text-sm font-mono font-bold text-green-400 group-hover:text-red-400">{walletAddress}</span>
+                    <span className="text-sm font-mono font-bold text-green-400 group-hover:text-red-400">
+                        {walletAddress.slice(0,6)}...{walletAddress.slice(-4)}
+                    </span>
                     <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400 ml-1" />
                  </button>
             ) : (
@@ -269,23 +306,51 @@ function App() {
                       <X className="w-6 h-6" />
                   </button>
                   
-                  <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
-                      <Wallet className="w-6 h-6 text-yellow-500" /> Connect Wallet
-                  </h2>
-                  <p className="text-gray-400 mb-6">Select a network to connect to KUBA Forge.</p>
+                  <div className="mb-6">
+                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
+                        <Wallet className="w-6 h-6 text-yellow-500" /> Connect Wallet
+                    </h2>
+                    <p className="text-gray-400 text-sm mt-1">Select connection mode and network.</p>
+                  </div>
+
+                  {/* SIMULATION TOGGLE SWITCH */}
+                  <div className="bg-slate-900 p-3 rounded-xl border border-gray-800 mb-6 flex items-center justify-between">
+                    <div className="flex items-center gap-2">
+                        <Zap className={`w-5 h-5 ${isSimulationMode ? 'text-green-400' : 'text-gray-500'}`} />
+                        <span className="text-sm font-bold text-gray-300">Simulation Mode</span>
+                    </div>
+                    <button 
+                        onClick={() => setIsSimulationMode(!isSimulationMode)}
+                        className="transition-colors"
+                    >
+                        {isSimulationMode ? (
+                            <ToggleRight className="w-10 h-10 text-green-400" />
+                        ) : (
+                            <ToggleLeft className="w-10 h-10 text-gray-600" />
+                        )}
+                    </button>
+                  </div>
                   
                   <div className="space-y-3">
+                      {!isSimulationMode && (
+                        <div className="bg-blue-900/20 p-3 rounded-lg border border-blue-500/30 text-xs text-blue-200 mb-4 flex items-start gap-2">
+                            <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
+                            This will attempt to connect to your real browser wallet (e.g. MetaMask) on BNB Chain.
+                        </div>
+                      )}
+
                       {isConnecting ? (
                         <div className="py-10 flex flex-col items-center justify-center text-gray-400">
                            <Loader2 className="w-10 h-10 animate-spin text-yellow-500 mb-3" />
-                           <p>Connecting to Provider...</p>
+                           <p>{isSimulationMode ? 'Simulating Connection...' : 'Waiting for Wallet...'}</p>
                         </div>
                       ) : (
                         Object.values(ChainType).map((chain) => (
                             <button
                                 key={chain}
                                 onClick={() => handleConnect(chain)}
-                                className="w-full p-4 bg-dark hover:bg-slate-800 border border-gray-700 hover:border-yellow-500 rounded-xl flex items-center justify-between group transition-all"
+                                disabled={!isSimulationMode && chain !== ChainType.BNB} // Only BNB implemented for Real Mode first
+                                className={`w-full p-4 bg-dark hover:bg-slate-800 border border-gray-700 hover:border-yellow-500 rounded-xl flex items-center justify-between group transition-all ${(!isSimulationMode && chain !== ChainType.BNB) ? 'opacity-50 cursor-not-allowed' : ''}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <span className="text-2xl">{CHAIN_CONFIG[chain].icon}</span>
