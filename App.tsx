@@ -1,3 +1,4 @@
+
 import React, { useState, useEffect } from 'react';
 import { ViewState, TokenData, NetworkMode, LaunchpadProject, ChainType } from './types';
 import { TokenCreator } from './components/TokenCreator';
@@ -6,13 +7,41 @@ import { AiAssistant } from './components/AiAssistant';
 import { Launchpad } from './components/Launchpad';
 import { TradeInterface } from './components/TradeInterface';
 import { TokenQualityBadge } from './components/TokenQualityBadge';
-import { LayoutGrid, PlusCircle, Wallet, Layers, Rocket, TrendingUp, Flame, ArrowRight, Search } from 'lucide-react';
+import { LayoutGrid, PlusCircle, Wallet, Layers, Rocket, TrendingUp, Flame, ArrowRight, Search, X, CheckCircle2, LogOut, Loader2 } from 'lucide-react';
 import { CHAIN_CONFIG } from './constants';
+
+// Helper to parse dates from JSON
+const dateReviver = (key: string, value: any) => {
+    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
+        return new Date(value);
+    }
+    return value;
+};
 
 function App() {
   const [view, setView] = useState<ViewState>(ViewState.DASHBOARD);
-  const [myTokens, setMyTokens] = useState<TokenData[]>([]);
-  const [launchpads, setLaunchpads] = useState<LaunchpadProject[]>([]);
+  
+  // Load initial state from LocalStorage if available
+  const [myTokens, setMyTokens] = useState<TokenData[]>(() => {
+      try {
+          const saved = localStorage.getItem('kuba_my_tokens');
+          return saved ? JSON.parse(saved, dateReviver) : [];
+      } catch (e) {
+          console.error("Failed to load tokens", e);
+          return [];
+      }
+  });
+
+  const [launchpads, setLaunchpads] = useState<LaunchpadProject[]>(() => {
+      try {
+          const saved = localStorage.getItem('kuba_launchpads');
+          return saved ? JSON.parse(saved, dateReviver) : [];
+      } catch (e) {
+          console.error("Failed to load launchpads", e);
+          return [];
+      }
+  });
+
   const [selectedToken, setSelectedToken] = useState<TokenData | null>(null);
   
   // Search State
@@ -21,8 +50,23 @@ function App() {
   // Mock Data for "Live Market" Section
   const [marketTokens, setMarketTokens] = useState<TokenData[]>([]);
 
+  // WALLET STATE
+  const [walletAddress, setWalletAddress] = useState<string | null>(null);
+  const [walletChain, setWalletChain] = useState<ChainType | null>(null);
+  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
+  const [isConnecting, setIsConnecting] = useState(false);
+
+  // Persist Data whenever it changes
   useEffect(() => {
-      // Generate some mock data for the dashboard to look alive
+      localStorage.setItem('kuba_my_tokens', JSON.stringify(myTokens));
+  }, [myTokens]);
+
+  useEffect(() => {
+      localStorage.setItem('kuba_launchpads', JSON.stringify(launchpads));
+  }, [launchpads]);
+
+  useEffect(() => {
+      // Generate mock data
       const chains = [ChainType.BNB, ChainType.SOL, ChainType.TON];
       const generated: TokenData[] = Array.from({length: 6}, (_, i) => ({
           id: `market-${i}`,
@@ -34,17 +78,17 @@ function App() {
           logoUrl: null,
           createdAt: new Date(),
           status: 'active',
-          liquidityLocked: i % 2 === 0, // Random
-          contractAddress: i % 3 !== 0 ? '0xMockAddress...' : undefined, // Random
-          ownershipRenounced: i === 0 || i === 3, // Random
+          liquidityLocked: i % 2 === 0,
+          contractAddress: i % 3 !== 0 ? '0xMockAddress...' : undefined,
+          ownershipRenounced: i === 0 || i === 3,
           currentPrice: Math.random() * 0.5,
           liquidityUSD: Math.random() * 50000 + 10000,
           transactions: []
       }));
       setMarketTokens(generated);
 
-      // Mock Launchpads if empty
-      if (launchpads.length === 0) {
+      // Mock Launchpads initial data (only if empty)
+      if (launchpads.length === 0 && !localStorage.getItem('kuba_launchpads')) {
           const mockLp: LaunchpadProject = {
               id: 'lp-mock-1',
               tokenId: 'market-0',
@@ -69,7 +113,6 @@ function App() {
     setMyTokens([newToken, ...myTokens]);
     setView(ViewState.DASHBOARD);
     
-    // Simulate deployment finishing after 3 seconds
     if (newToken.status === 'deploying') {
       setTimeout(() => {
         setMyTokens(prev => prev.map(t => t.id === newToken.id ? { ...t, status: 'active' } : t));
@@ -83,7 +126,11 @@ function App() {
   };
 
   const handleUpdateToken = (updatedToken: TokenData) => {
-    setMyTokens(prev => prev.map(t => t.id === updatedToken.id ? updatedToken : t));
+    const updatedList = myTokens.map(t => t.id === updatedToken.id ? updatedToken : t);
+    setMyTokens(updatedList);
+    // Explicitly save to ensure sync immediately
+    localStorage.setItem('kuba_my_tokens', JSON.stringify(updatedList));
+    
     if (selectedToken && selectedToken.id === updatedToken.id) {
       setSelectedToken(updatedToken);
     }
@@ -91,6 +138,31 @@ function App() {
 
   const handleCreateLaunchpad = (project: LaunchpadProject) => {
     setLaunchpads([project, ...launchpads]);
+  };
+
+  // Wallet Functions
+  const handleConnect = async (chain: ChainType) => {
+      setIsConnecting(true);
+      
+      // Simulate delay
+      await new Promise(resolve => setTimeout(resolve, 1000));
+
+      setWalletChain(chain);
+      
+      // Generate a mock address based on chain
+      let mockAddr = "";
+      if(chain === ChainType.BNB) mockAddr = "0x71C...9A21";
+      if(chain === ChainType.SOL) mockAddr = "AuX...9k2P";
+      if(chain === ChainType.TON) mockAddr = "EQD...j82Z";
+      
+      setWalletAddress(mockAddr);
+      setIsConnecting(false);
+      setIsConnectModalOpen(false);
+  };
+
+  const handleDisconnect = () => {
+      setWalletAddress(null);
+      setWalletChain(null);
   };
 
   const getContextHint = () => {
@@ -101,7 +173,6 @@ function App() {
     return "Dashboard overview";
   };
 
-  // Filter Logic
   const filteredMarketTokens = marketTokens.filter(token => 
     token.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
     token.symbol.toLowerCase().includes(searchQuery.toLowerCase())
@@ -158,12 +229,29 @@ function App() {
             >
                 <PlusCircle className="w-4 h-4" /> Create Token
             </button>
-            <button className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-yellow-500/50 px-4 py-2 rounded-full transition-all group">
-                <Wallet className="w-4 h-4 text-yellow-400 group-hover:text-yellow-300" />
-                <span className="text-sm font-medium group-hover:text-yellow-100">Connect Wallet</span>
-            </button>
+
+            {/* Wallet Button */}
+            {walletAddress ? (
+                 <button 
+                    onClick={handleDisconnect}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-red-900/50 border border-green-500/50 hover:border-red-500/50 px-4 py-2 rounded-full transition-all group"
+                 >
+                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
+                    <span className="text-sm font-mono font-bold text-green-400 group-hover:text-red-400">{walletAddress}</span>
+                    <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400 ml-1" />
+                 </button>
+            ) : (
+                <button 
+                    onClick={() => setIsConnectModalOpen(true)}
+                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-yellow-500/50 px-4 py-2 rounded-full transition-all group"
+                >
+                    <Wallet className="w-4 h-4 text-yellow-400 group-hover:text-yellow-300" />
+                    <span className="text-sm font-medium group-hover:text-yellow-100">Connect Wallet</span>
+                </button>
+            )}
           </div>
         </div>
+
         {/* Mobile Nav Strip */}
         <div className="md:hidden flex justify-around border-t border-gray-800 bg-dark/50 backdrop-blur">
             <button onClick={() => setView(ViewState.DASHBOARD)} className={`p-3 flex flex-col items-center text-[10px] ${view === ViewState.DASHBOARD ? 'text-yellow-500' : 'text-gray-500'}`}><LayoutGrid className="w-5 h-5 mb-1"/>Dash</button>
@@ -173,11 +261,53 @@ function App() {
         </div>
       </nav>
 
+      {/* Wallet Modal */}
+      {isConnectModalOpen && (
+          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
+              <div className="bg-card border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
+                  <button onClick={() => setIsConnectModalOpen(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
+                      <X className="w-6 h-6" />
+                  </button>
+                  
+                  <h2 className="text-2xl font-bold text-white mb-2 flex items-center gap-2">
+                      <Wallet className="w-6 h-6 text-yellow-500" /> Connect Wallet
+                  </h2>
+                  <p className="text-gray-400 mb-6">Select a network to connect to KUBA Forge.</p>
+                  
+                  <div className="space-y-3">
+                      {isConnecting ? (
+                        <div className="py-10 flex flex-col items-center justify-center text-gray-400">
+                           <Loader2 className="w-10 h-10 animate-spin text-yellow-500 mb-3" />
+                           <p>Connecting to Provider...</p>
+                        </div>
+                      ) : (
+                        Object.values(ChainType).map((chain) => (
+                            <button
+                                key={chain}
+                                onClick={() => handleConnect(chain)}
+                                className="w-full p-4 bg-dark hover:bg-slate-800 border border-gray-700 hover:border-yellow-500 rounded-xl flex items-center justify-between group transition-all"
+                            >
+                                <div className="flex items-center gap-3">
+                                    <span className="text-2xl">{CHAIN_CONFIG[chain].icon}</span>
+                                    <div className="text-left">
+                                        <div className="font-bold text-white group-hover:text-yellow-400 transition-colors">{chain}</div>
+                                        <div className="text-xs text-gray-500">{CHAIN_CONFIG[chain].walletName}</div>
+                                    </div>
+                                </div>
+                                <div className="w-4 h-4 rounded-full border border-gray-600 group-hover:bg-yellow-500 group-hover:border-yellow-500 transition-colors"></div>
+                            </button>
+                        ))
+                      )}
+                  </div>
+              </div>
+          </div>
+      )}
+
       {/* Main Content */}
       <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
         {view === ViewState.DASHBOARD && (
           <div className="space-y-12 animate-fade-in">
-            {/* Section 1: Stats & Quick Actions */}
+            {/* Stats Section */}
             <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
               <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-yellow-500/10 hover:border-yellow-500/30 transition-colors relative overflow-hidden">
                  <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-3xl"></div>
@@ -197,52 +327,7 @@ function App() {
                 <span className="font-bold text-black text-lg">Create New Token</span>
               </button>
             </div>
-
-            {/* Section 2: Active Launchpads */}
-            <div className="bg-gradient-to-r from-slate-900 to-slate-800 rounded-3xl border border-gray-800 p-8 relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-96 h-96 bg-orange-500/5 rounded-full blur-3xl"></div>
-                <div className="flex items-center justify-between mb-6 relative z-10">
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Rocket className="w-6 h-6 text-orange-500" /> Active Launchpads
-                    </h2>
-                    <button onClick={() => setView(ViewState.LAUNCHPAD)} className="text-sm text-yellow-400 hover:text-white flex items-center gap-1 font-medium">
-                        View All <ArrowRight className="w-4 h-4"/>
-                    </button>
-                </div>
-                
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 relative z-10">
-                    {launchpads.map(lp => (
-                        <div key={lp.id} className="bg-card/50 backdrop-blur-sm border border-gray-700 p-5 rounded-xl hover:border-orange-500/50 transition-all">
-                            <div className="flex items-center gap-3 mb-4">
-                                <div className="w-10 h-10 rounded-full bg-slate-700 flex items-center justify-center font-bold text-white">
-                                    {lp.tokenSymbol[0]}
-                                </div>
-                                <div>
-                                    <h4 className="font-bold text-white">{lp.tokenName}</h4>
-                                    <div className="text-xs text-orange-400 flex items-center gap-1">
-                                        <Flame className="w-3 h-3 fill-orange-400" /> Raising {lp.hardCap} {CHAIN_CONFIG[lp.chain].currency}
-                                    </div>
-                                </div>
-                            </div>
-                            <div className="w-full bg-slate-700 h-1.5 rounded-full overflow-hidden mb-2">
-                                <div className="h-full bg-gradient-to-r from-yellow-500 to-orange-500 w-2/3"></div>
-                            </div>
-                            <div className="flex justify-between text-xs text-gray-400">
-                                <span>Progress</span>
-                                <span>66%</span>
-                            </div>
-                        </div>
-                    ))}
-                     {/* Placeholder to look full */}
-                     <div className="bg-card/50 backdrop-blur-sm border border-gray-700 border-dashed p-5 rounded-xl flex items-center justify-center">
-                        <button onClick={() => setView(ViewState.LAUNCHPAD)} className="text-gray-500 hover:text-orange-400 flex flex-col items-center gap-2 transition-colors">
-                            <PlusCircle className="w-8 h-8" />
-                            <span className="font-medium">Launch Your Token</span>
-                        </button>
-                    </div>
-                </div>
-            </div>
-
+            
             {/* Search Filter */}
             <div className="relative z-10">
                 <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
@@ -257,66 +342,7 @@ function App() {
                 />
             </div>
 
-            {/* Section 3: Live Market (Trending Tokens) */}
-            <div>
-                 <div className="flex items-center justify-between mb-6">
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <TrendingUp className="w-6 h-6 text-green-500" /> Live Trading Market
-                    </h2>
-                    <button onClick={() => setView(ViewState.TRADE)} className="text-sm text-yellow-400 hover:text-white flex items-center gap-1 font-medium">
-                        Go to DEX <ArrowRight className="w-4 h-4"/>
-                    </button>
-                </div>
-
-                {filteredMarketTokens.length > 0 ? (
-                    <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-                        {filteredMarketTokens.map((token) => (
-                            <div key={token.id} className="bg-card border border-gray-800 rounded-xl p-5 hover:border-gray-600 transition-all">
-                                <div className="flex justify-between items-start mb-3">
-                                    <div className="flex items-center gap-3">
-                                        <div className="w-10 h-10 rounded-full bg-slate-800 flex items-center justify-center border border-gray-700">
-                                            <span className="font-bold text-gray-500">{token.symbol[0]}</span>
-                                        </div>
-                                        <div>
-                                            <h4 className="font-bold text-white">{token.name}</h4>
-                                            <span className="text-xs text-gray-500">{token.chain}</span>
-                                        </div>
-                                    </div>
-                                    <div className="text-right">
-                                        <div className="text-white font-mono font-medium">${token.currentPrice?.toFixed(4)}</div>
-                                        <div className="text-xs text-green-400">+{(Math.random() * 10).toFixed(2)}%</div>
-                                    </div>
-                                </div>
-                                
-                                <div className="flex items-center gap-4 text-xs text-gray-400 mb-4 border-y border-gray-800 py-2">
-                                    <div>
-                                        <span className="block text-gray-600 mb-0.5">Liquidity</span>
-                                        <span className="text-white font-medium">${token.liquidityUSD?.toLocaleString()}</span>
-                                    </div>
-                                    <div className="w-px h-6 bg-gray-800"></div>
-                                    <div>
-                                        <span className="block text-gray-600 mb-0.5">Volume 24h</span>
-                                        <span className="text-white font-medium">${(Math.random() * 100000).toLocaleString(undefined, {maximumFractionDigits: 0})}</span>
-                                    </div>
-                                </div>
-
-                                <div className="flex justify-between items-center">
-                                    <TokenQualityBadge token={token} />
-                                    <button onClick={() => setView(ViewState.TRADE)} className="px-3 py-1 bg-slate-800 hover:bg-yellow-500 hover:text-black text-xs rounded-lg transition-colors border border-gray-700">
-                                        Trade
-                                    </button>
-                                </div>
-                            </div>
-                        ))}
-                    </div>
-                ) : (
-                     <div className="text-center py-8 text-gray-500 border border-dashed border-gray-800 rounded-xl">
-                        No market tokens found matching "{searchQuery}"
-                    </div>
-                )}
-            </div>
-
-            {/* Section 4: My Created Tokens */}
+            {/* My Tokens Section */}
             <div className="pt-8 border-t border-gray-800">
               <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
                 <Layers className="w-5 h-5 text-yellow-500" /> Your Assets
@@ -359,7 +385,6 @@ function App() {
                                 </div>
                             </div>
                             
-                            {/* Quality Badge for My Tokens */}
                             <div className="mb-4">
                                 <TokenQualityBadge token={token} />
                             </div>
@@ -372,10 +397,6 @@ function App() {
                                 <div className="flex justify-between">
                                 <span>Supply</span>
                                 <span className="text-gray-200">{token.supply.toLocaleString()}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                <span>Status</span>
-                                <span className={`${token.status === 'deploying' ? 'text-blue-400 animate-pulse' : token.status === 'active' ? 'text-green-400' : 'text-red-400'} uppercase font-bold text-xs`}>{token.status}</span>
                                 </div>
                             </div>
                             <button 
@@ -412,6 +433,7 @@ function App() {
             token={selectedToken} 
             onBack={() => setView(ViewState.DASHBOARD)} 
             onUpdateToken={handleUpdateToken}
+            walletAddress={walletAddress}
           />
         )}
 
@@ -428,13 +450,7 @@ function App() {
         )}
       </main>
 
-      {/* Global AI Assistant */}
       <AiAssistant contextHint={getContextHint()} />
-
-      {/* Event listener for 'askAI' from components */}
-      <script dangerouslySetInnerHTML={{__html: `
-        // Bridge to allow non-react component triggers if needed
-      `}} />
     </div>
   );
 }
