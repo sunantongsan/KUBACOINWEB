@@ -1,15 +1,26 @@
-import React from 'react';
-import ReactDOM from 'react-dom/client';
-import App from './App';
-
-const rootElement = document.getElementById('root');
-if (!rootElement) {
-  throw new Error("Could not find root element to mount to");
+{
+  "name": "kuba-forge-ai",
+  "version": "1.0.0",
+  "description": "All-in-one Crypto Token Forge & Management Platform powered by AI",
+  "source": "index.html",
+  "scripts": {
+    "start": "parcel",
+    "build": "parcel build --no-scope-hoist"
+  },
+  "dependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "lucide-react": "^0.263.1",
+    "@google/genai": "*",
+    "tailwindcss": "^3.3.3",
+    "wagmi": "^2.5.7",
+    "viem": "^2.7.1",
+    "@tanstack/react-query": "^5.20.1"
+  },
+  "devDependencies": {
+    "parcel": "^2.9.3",
+    "process": "^0.11.10",
+    "buffer": "^6.0.3",
+    "events": "^3.3.0"
+  }
 }
-
-const root = ReactDOM.createRoot(rootElement);
-root.render(
-  <React.StrictMode>
-    <App />
-  </React.StrictMode>
-);
