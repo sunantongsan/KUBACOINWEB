@@ -1,6 +1,6 @@
 
 import React, { useState } from 'react';
-import { Layers, CheckCircle, Settings, Loader2, Coins, Image as ImageIcon, Info, ExternalLink, AlertTriangle, Zap } from 'lucide-react';
+import { Layers, CheckCircle, Loader2, Coins, Image as ImageIcon, AlertTriangle, Zap, Flame, ShieldCheck, FileCode, Droplets, ExternalLink } from 'lucide-react';
 import { BlockchainService } from '../services/blockchain';
 import { FEE_WALLETS, PLATFORM_FEES } from '../types';
 
@@ -16,7 +16,10 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
   const [network, setNetwork] = useState<Network>('BNB');
   const [isLoading, setIsLoading] = useState(false);
+  const [currentStep, setCurrentStep] = useState<string>(''); // 'FEE', 'DEPLOY', 'APPROVE', 'LIQUIDITY'
   const [deployedAddress, setDeployedAddress] = useState<string | null>(null);
+  
+  // Form State
   const [form, setForm] = useState({
     name: '',
     symbol: '',
@@ -25,6 +28,14 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
     description: '',
     logoUrl: ''
   });
+
+  // Advanced Options
+  const [isRenounced, setIsRenounced] = useState(false);
+  const [isVerified, setIsVerified] = useState(true);
+
+  // Liquidity State
+  const [addLiquidityNow, setAddLiquidityNow] = useState(false);
+  const [liquidityBnbAmount, setLiquidityBnbAmount] = useState('');
 
   const [userTokens, setUserTokens] = useState([
     { id: 1, name: 'Kuba Test Token', symbol: 'KTT', network: 'BNB', supply: '1,000,000', address: '0x71C...9A21', logoUrl: '' },
@@ -40,50 +51,89 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
     }
 
     if (network !== 'BNB') {
-      alert("Real-time deployment via web is currently optimized for BNB Chain. Solana and TON require wallet-specific SDKs that are being integrated.");
+      alert("Auto-Liquidity is currently optimized for BNB Chain. Please use BNB network.");
+      return;
+    }
+
+    if (addLiquidityNow && !liquidityBnbAmount) {
+      alert("Please enter a BNB amount to set the initial price.");
       return;
     }
 
     setIsLoading(true);
+    setDeployedAddress(null);
+    
     try {
       // Ensure we are on the right network
       await blockchainService.switchNetwork(isTestnet);
 
-      // Call the service to deploy
-      const txHash = await blockchainService.deployToken(form.name, form.symbol, form.supply);
+      // STEP 1: DEPLOY TOKEN (Includes Fee Payment inside service if structured, but here we treat deployToken as main entry)
+      setCurrentStep('Paying Fee & Deploying Contract...');
       
-      if (txHash) {
-        const newAddress = "0x" + txHash.substring(2, 42); // Mock address from hash for display if real receipt not waited
-        setDeployedAddress(txHash); // In this demo we use hash
+      // This will THROW if funds are insufficient. No fake success.
+      const newAddress = await blockchainService.deployToken(
+        form.name, 
+        form.symbol, 
+        form.supply, 
+        isRenounced,
+        isVerified
+      );
+      
+      if (newAddress) {
+        setDeployedAddress(newAddress);
         
-        setUserTokens([
-          { 
-            id: Date.now(), 
-            name: form.name, 
-            symbol: form.symbol, 
-            network: network, 
-            supply: form.supply, 
-            address: newAddress.substring(0,10) + "...",
-            logoUrl: form.logoUrl
-          }, 
-          ...userTokens
-        ]);
+        // STEP 3 & 4: AUTO LIQUIDITY (If selected)
+        if (addLiquidityNow && liquidityBnbAmount) {
+          // 3. Approve
+          setCurrentStep('Approving Token for Liquidity...');
+          await blockchainService.approveToken(newAddress, form.supply, isTestnet);
+          
+          // 4. Add Liquidity
+          setCurrentStep('Creating Market (Setting Price)...');
+          await blockchainService.addLiquidity(newAddress, form.supply, liquidityBnbAmount, isTestnet);
+        }
+
+        // Success Handling
+        const newToken = { 
+          id: Date.now(), 
+          name: form.name, 
+          symbol: form.symbol, 
+          network: network, 
+          supply: form.supply, 
+          address: newAddress,
+          logoUrl: form.logoUrl 
+        };
         
-        alert(`Transaction Sent! Hash: ${txHash}`);
+        setUserTokens([newToken, ...userTokens]);
+        
+        // Reset Form
         setForm({ name: '', symbol: '', supply: '', decimals: '18', description: '', logoUrl: '' });
+        setAddLiquidityNow(false);
+        setLiquidityBnbAmount('');
         setActiveTab('manage');
       }
-    } catch (error) {
-      console.error(error);
-      alert("Deployment failed or rejected. See console.");
+    } catch (error: any) {
+      console.error("Deploy Error:", error);
+      // Show the REAL error to the user
+      let errorMessage = error.message || "Unknown Error";
+      
+      // Making common errors user-friendly
+      if (errorMessage.includes("insufficient funds")) {
+        errorMessage = "Transaction Failed: Insufficient BNB for gas or fees.";
+      } else if (errorMessage.includes("user rejected")) {
+        errorMessage = "Transaction Failed: You rejected the request in MetaMask.";
+      }
+      
+      alert(`${errorMessage}`);
     } finally {
       setIsLoading(false);
+      setCurrentStep('');
     }
   };
 
   return (
     <div className="max-w-4xl mx-auto space-y-6">
-      <div className="flex items-center justify-between">
+      <div className="flex flex-col md:flex-row md:items-center justify-between gap-4">
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
             <Layers className="text-emerald-400" />
@@ -94,19 +144,32 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
              {isTestnet && <span className="text-yellow-500 text-xs border border-yellow-500/30 px-1 rounded">TEST MODE</span>}
           </p>
         </div>
-        <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
-          <button
-            onClick={() => setActiveTab('create')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'create' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
-          >
-            Create Token
-          </button>
-          <button
-            onClick={() => setActiveTab('manage')}
-            className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'manage' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
-          >
-            My Tokens
-          </button>
+        <div className="flex gap-2">
+           {isTestnet && (
+            <a 
+              href="https://discord.com/invite/bnbchain" 
+              target="_blank" 
+              rel="noreferrer"
+              className="flex items-center gap-2 px-3 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg text-xs font-bold hover:bg-blue-600/30 transition-all"
+            >
+              <Droplets size={14} />
+              💧 Get Free Testnet BNB
+            </a>
+           )}
+          <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
+            <button
+              onClick={() => setActiveTab('create')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'create' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              Create Token
+            </button>
+            <button
+              onClick={() => setActiveTab('manage')}
+              className={`px-4 py-2 rounded-md text-sm font-medium transition-all ${activeTab === 'manage' ? 'bg-emerald-600 text-white' : 'text-slate-400 hover:text-white'}`}
+            >
+              My Tokens
+            </button>
+          </div>
         </div>
       </div>
 
@@ -126,7 +189,12 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
           )}
 
           <div className="mb-8">
-            <label className="block text-sm font-medium text-slate-300 mb-3">Select Network</label>
+            <div className="flex justify-between items-center mb-3">
+               <label className="text-sm font-medium text-slate-300">Select Network</label>
+               <span className="bg-emerald-900/30 text-emerald-400 text-[10px] px-2 py-1 rounded border border-emerald-500/30">
+                  Competitors charge 0.5 - 1 BNB. We charge {PLATFORM_FEES.TOKEN_CREATION_BNB} BNB.
+               </span>
+            </div>
             <div className="grid grid-cols-3 gap-4">
               {[
                 { id: 'BNB', name: 'BNB Chain', color: 'from-yellow-500/20 to-yellow-600/20 border-yellow-500/50 text-yellow-400' },
@@ -147,12 +215,9 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
                 </button>
               ))}
             </div>
-            {network !== 'BNB' && (
-               <p className="text-xs text-yellow-500 mt-2 text-center">Note: Solana & TON deployments require manual wallet confirmation in the next step.</p>
-            )}
           </div>
 
-          <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
             {/* Left Column */}
             <div className="space-y-4">
               <div>
@@ -178,7 +243,7 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1 flex items-center gap-2">
                   Logo URL
-                  <span className="text-xs text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded">Optional</span>
+                  <span className="text-xs text-emerald-400 bg-emerald-900/30 px-2 py-0.5 rounded">Instant View</span>
                 </label>
                 <div className="flex gap-3">
                   <div className="flex-1">
@@ -217,6 +282,9 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
                   placeholder="e.g. 1000000"
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                 />
+                <p className="text-[10px] text-slate-400 mt-1">
+                   Tokens sent to wallet: {walletAddress ? `${walletAddress.substring(0,6)}...` : 'not connected'}
+                </p>
               </div>
               <div>
                 <label className="block text-sm font-medium text-slate-300 mb-1">Decimals</label>
@@ -228,41 +296,134 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
                   className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none"
                 />
               </div>
-              <div>
-                <label className="block text-sm font-medium text-slate-300 mb-1">Description</label>
-                <textarea
-                  rows={4}
-                  value={form.description}
-                  onChange={(e) => setForm({...form, description: e.target.value})}
-                  placeholder="Brief description of your project..."
-                  className="w-full bg-slate-900 border border-slate-700 rounded-lg px-4 py-3 text-white focus:border-emerald-500 focus:ring-1 focus:ring-emerald-500 outline-none resize-none"
-                />
+              
+              {/* Advanced Options */}
+              <div className="bg-slate-900/50 rounded-lg p-3 border border-slate-700">
+                <label className="text-xs font-bold text-slate-400 uppercase mb-2 block">Security Options</label>
+                <div className="space-y-2">
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-emerald-400 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={isVerified}
+                      onChange={(e) => setIsVerified(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-600 text-emerald-600 bg-slate-800"
+                    />
+                    <div className="flex items-center gap-1 text-sm">
+                      <FileCode size={14} />
+                      Auto-Verify Contract on BscScan
+                    </div>
+                  </label>
+                  
+                  <label className="flex items-center gap-2 cursor-pointer hover:text-red-400 transition-colors">
+                    <input 
+                      type="checkbox" 
+                      checked={isRenounced}
+                      onChange={(e) => setIsRenounced(e.target.checked)}
+                      className="w-4 h-4 rounded border-slate-600 text-red-600 bg-slate-800"
+                    />
+                    <div className="flex items-center gap-1 text-sm">
+                      <ShieldCheck size={14} />
+                      Renounce Ownership (Make SAFU)
+                    </div>
+                  </label>
+                </div>
               </div>
             </div>
+          </div>
+
+          {/* INSTANT LIQUIDITY SECTION */}
+          <div className="mb-8 bg-slate-900/60 border border-blue-500/30 rounded-xl p-6 relative overflow-hidden">
+             <div className="absolute top-0 right-0 w-32 h-32 bg-blue-500/10 rounded-full blur-2xl -translate-y-1/2 translate-x-1/2 pointer-events-none"></div>
+             
+             <div className="flex items-start gap-4">
+               <div className="mt-1">
+                 <input 
+                   type="checkbox" 
+                   id="autoLiquidity"
+                   checked={addLiquidityNow}
+                   onChange={(e) => setAddLiquidityNow(e.target.checked)}
+                   className="w-5 h-5 rounded border-slate-600 text-emerald-600 focus:ring-emerald-500 bg-slate-800 cursor-pointer"
+                 />
+               </div>
+               <div className="flex-1">
+                 <label htmlFor="autoLiquidity" className="font-bold text-white text-lg cursor-pointer flex items-center gap-2">
+                   Create Market Immediately (Auto-Liquidity)
+                   <span className="px-2 py-0.5 bg-blue-500 text-white text-[10px] rounded-full font-bold">RECOMMENDED</span>
+                 </label>
+                 <p className="text-slate-400 text-sm mt-1">
+                   Automatically create a Liquidity Pool on PancakeSwap. 
+                   Token will be tradable <strong>instantly</strong>.
+                 </p>
+
+                 {addLiquidityNow && (
+                   <div className="mt-4 bg-slate-800 p-4 rounded-lg border border-slate-700 animate-in fade-in slide-in-from-top-2">
+                     <label className="block text-sm font-medium text-white mb-2">
+                       Initial BNB Liquidity
+                     </label>
+                     <div className="flex items-center gap-4">
+                        <div className="relative flex-1">
+                          <input 
+                            type="number" 
+                            value={liquidityBnbAmount}
+                            onChange={(e) => setLiquidityBnbAmount(e.target.value)}
+                            placeholder="e.g. 1.0"
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg pl-4 pr-12 py-3 text-white focus:border-blue-500 outline-none"
+                          />
+                          <span className="absolute right-4 top-1/2 -translate-y-1/2 text-slate-400 font-bold text-xs">BNB</span>
+                        </div>
+                        <div className="text-slate-400 text-sm">=</div>
+                        <div className="relative flex-1 opacity-75">
+                          <input 
+                            type="text" 
+                            value={form.supply ? `${parseFloat(form.supply).toLocaleString()} ${form.symbol}` : ''}
+                            disabled
+                            className="w-full bg-slate-900 border border-slate-600 rounded-lg px-4 py-3 text-white cursor-not-allowed"
+                          />
+                        </div>
+                     </div>
+                   </div>
+                 )}
+               </div>
+             </div>
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-700">
             <div className="flex flex-col gap-2 mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400">Estimated Gas:</span>
-                  <span className="text-white font-bold">~0.004 BNB</span>
+                  <span className="text-slate-400">Action:</span>
+                  <span className="text-white font-bold">
+                    Deploy + Mint {isRenounced ? '+ Renounce' : ''} {addLiquidityNow ? '+ Liquidity' : ''}
+                  </span>
                </div>
                <div className="flex justify-between text-sm">
-                  <span className="text-slate-400 flex items-center gap-1"><Zap size={14} className="text-yellow-400"/>Service Fee (Lowest in Market):</span>
-                  <span className="text-green-400 font-bold">{PLATFORM_FEES.TOKEN_CREATION_BNB} BNB</span>
+                  <span className="text-slate-400 flex items-center gap-1"><Zap size={14} className="text-yellow-400"/>Service Fee:</span>
+                  <span className="text-green-400 font-bold">{PLATFORM_FEES.TOKEN_CREATION_BNB} BNB (50% OFF)</span>
                </div>
                <div className="text-[10px] text-slate-500 text-right mt-1">
                  Fee sent to: {FEE_WALLETS.BNB.substring(0,8)}...{FEE_WALLETS.BNB.substring(FEE_WALLETS.BNB.length-6)}
                </div>
-               {!walletAddress && <span className="text-red-400 text-sm mt-1">Wallet not connected</span>}
             </div>
+            
             <button
               onClick={handleDeploy}
               disabled={isLoading || !form.name || !form.symbol || !walletAddress}
-              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:grayscale"
+              className={`w-full py-4 font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed text-lg shadow-lg ${
+                addLiquidityNow 
+                ? 'bg-gradient-to-r from-blue-600 to-purple-600 hover:from-blue-500 hover:to-purple-500 text-white'
+                : 'bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white'
+              }`}
             >
-              {isLoading ? <Loader2 className="animate-spin" /> : <Coins />}
-              {isLoading ? 'Confirming in Wallet...' : `Deploy Contract (${PLATFORM_FEES.TOKEN_CREATION_BNB} BNB Fee)`}
+              {isLoading ? (
+                <>
+                  <Loader2 className="animate-spin" />
+                  {currentStep || 'Processing...'}
+                </>
+              ) : (
+                <>
+                  {addLiquidityNow ? <Flame /> : <Coins />}
+                  {addLiquidityNow ? 'Create Token & Launch Market' : 'Deploy Token Only'}
+                </>
+              )}
             </button>
           </div>
         </div>
@@ -271,11 +432,14 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
       {activeTab === 'manage' && (
         <div className="space-y-4">
           {deployedAddress && (
-            <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl flex items-center gap-3 mb-4">
-              <CheckCircle className="text-green-500" />
+            <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl flex items-center gap-3 mb-4 animate-in fade-in slide-in-from-top-4">
+              <div className="w-12 h-12 rounded-full bg-green-500/20 flex items-center justify-center text-green-500">
+                <CheckCircle size={24} />
+              </div>
               <div>
-                <p className="text-green-400 font-bold">Recent Deployment Successful!</p>
-                <p className="text-xs text-green-300/70 font-mono break-all">{deployedAddress}</p>
+                <p className="text-green-400 font-bold text-lg">Token Created Successfully!</p>
+                <p className="text-sm text-green-300/70 font-mono break-all">{deployedAddress}</p>
+                <p className="text-xs text-slate-400 mt-1">Tokens are now in your wallet.</p>
               </div>
             </div>
           )}
@@ -298,16 +462,13 @@ export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, wa
                     <span>•</span>
                     <span>Supply: {token.supply}</span>
                     <span>•</span>
-                    <span className="font-mono">{token.address}</span>
+                    <span className="font-mono">{token.address.substring(0, 8)}...</span>
                   </div>
                 </div>
               </div>
               <div className="flex gap-2">
                 <button className="p-2 hover:bg-slate-700 rounded-lg text-slate-300" title="View on Explorer">
                   <ExternalLink size={18} />
-                </button>
-                <button className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors">
-                  Manage
                 </button>
               </div>
             </div>
