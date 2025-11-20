@@ -21,7 +21,7 @@ const NETWORKS = {
 };
 
 /**
- * Treasury Wallets for Platform Fees (5%)
+ * Treasury Wallets for Platform Fees
  */
 export const TREASURY_WALLETS = {
   BNB: '0x3C19Ba6fcdf48bf10Aa78771bFd3913b33F133C9', // LUNC Holder Wallet
@@ -101,10 +101,11 @@ export const connectWalletAPI = async (network: NetworkId): Promise<{ address: s
     if (!window.ethereum) throw new Error('MetaMask/Web3 Wallet not found.');
     
     try {
-      // Request Accounts
+      // Request Accounts first
       const accounts = await window.ethereum.request({ method: 'eth_requestAccounts' });
       
-      // Switch Network (Force correct chain)
+      // Check & Switch Network (Force correct chain)
+      // We handle this carefully to avoid errors if already connected
       await switchNetworkBNB(network);
       
       return { address: accounts[0], walletType: 'metamask' };
@@ -129,7 +130,6 @@ export const connectWalletAPI = async (network: NetworkId): Promise<{ address: s
       
       // Alert user for Devnet if needed (Simulated switch prompt)
       if (network === 'solana-devnet') {
-        // Phantom handles network switching in UI, but we can warn/guide user
         console.log("Please ensure your Phantom wallet is set to Devnet for testing.");
       }
 
@@ -153,9 +153,6 @@ export const connectWalletAPI = async (network: NetworkId): Promise<{ address: s
     
     try {
       if (network === 'ton-testnet') {
-          // TonConnect doesn't strictly enforce network switch programmatically in all versions
-          // We rely on the user having the correct network selected or the wallet prompt.
-          // Adding a small delay to ensure provider is ready
           await new Promise(resolve => setTimeout(resolve, 500));
       }
 
@@ -176,13 +173,22 @@ export const connectWalletAPI = async (network: NetworkId): Promise<{ address: s
 };
 
 /**
- * Helper: Switch EVM Network
+ * Helper: Switch EVM Network with Check
  */
 const switchNetworkBNB = async (targetNetwork: 'bnb-mainnet' | 'bnb-testnet') => {
   if (!window.ethereum) return;
   const config = NETWORKS[targetNetwork];
   
   try {
+    // 1. Check current chain ID first to avoid unnecessary switch prompts
+    const currentChainId = await window.ethereum.request({ method: 'eth_chainId' });
+    
+    // Compare chain IDs (normalize to lowercase for safety)
+    if (currentChainId.toLowerCase() === config.chainId.toLowerCase()) {
+        return; // Already on the correct network
+    }
+
+    // 2. Attempt to switch
     await window.ethereum.request({
       method: 'eth_switchEthereumChain',
       params: [{ chainId: config.chainId }],
@@ -200,6 +206,10 @@ const switchNetworkBNB = async (targetNetwork: 'bnb-mainnet' | 'bnb-testnet') =>
       }
     } else {
       console.error("Switch Network Error:", switchError);
+      // Don't throw if user rejected switch, just let them know
+      if (switchError.code === 4001) {
+         throw new Error("Network switch rejected by user.");
+      }
       throw new Error(`Please switch to ${config.chainName} in your wallet.`);
     }
   }
