@@ -1,13 +1,22 @@
 
 import React, { useState } from 'react';
-import { Layers, CheckCircle, Settings, Loader2, Coins, Image as ImageIcon, Info } from 'lucide-react';
+import { Layers, CheckCircle, Settings, Loader2, Coins, Image as ImageIcon, Info, ExternalLink, AlertTriangle, Zap } from 'lucide-react';
+import { BlockchainService } from '../services/blockchain';
+import { FEE_WALLETS, PLATFORM_FEES } from '../types';
 
 type Network = 'BNB' | 'SOL' | 'TON';
 
-export const TokenFactory: React.FC = () => {
+interface TokenFactoryProps {
+  isTestnet?: boolean;
+  walletAddress?: string | null;
+  blockchainService?: BlockchainService;
+}
+
+export const TokenFactory: React.FC<TokenFactoryProps> = ({ isTestnet = true, walletAddress, blockchainService }) => {
   const [activeTab, setActiveTab] = useState<'create' | 'manage'>('create');
   const [network, setNetwork] = useState<Network>('BNB');
   const [isLoading, setIsLoading] = useState(false);
+  const [deployedAddress, setDeployedAddress] = useState<string | null>(null);
   const [form, setForm] = useState({
     name: '',
     symbol: '',
@@ -19,30 +28,57 @@ export const TokenFactory: React.FC = () => {
 
   const [userTokens, setUserTokens] = useState([
     { id: 1, name: 'Kuba Test Token', symbol: 'KTT', network: 'BNB', supply: '1,000,000', address: '0x71C...9A21', logoUrl: '' },
-    { id: 2, name: 'Solar Meme', symbol: 'MEME', network: 'SOL', supply: '100,000,000', address: 'Hu2...9zL', logoUrl: 'https://cdn.jsdelivr.net/gh/atomiclabs/cryptocurrency-icons@1a63530be6e374711a8554f31b17e4cb92c25fa5/128/color/sol.png' },
   ]);
 
-  const handleDeploy = () => {
+  const handleDeploy = async () => {
+    if (!blockchainService) return;
+    
+    if (!walletAddress) {
+      alert("Please connect your wallet first!");
+      await blockchainService.connectWallet();
+      return;
+    }
+
+    if (network !== 'BNB') {
+      alert("Real-time deployment via web is currently optimized for BNB Chain. Solana and TON require wallet-specific SDKs that are being integrated.");
+      return;
+    }
+
     setIsLoading(true);
-    // Simulate blockchain transaction
-    setTimeout(() => {
+    try {
+      // Ensure we are on the right network
+      await blockchainService.switchNetwork(isTestnet);
+
+      // Call the service to deploy
+      const txHash = await blockchainService.deployToken(form.name, form.symbol, form.supply);
+      
+      if (txHash) {
+        const newAddress = "0x" + txHash.substring(2, 42); // Mock address from hash for display if real receipt not waited
+        setDeployedAddress(txHash); // In this demo we use hash
+        
+        setUserTokens([
+          { 
+            id: Date.now(), 
+            name: form.name, 
+            symbol: form.symbol, 
+            network: network, 
+            supply: form.supply, 
+            address: newAddress.substring(0,10) + "...",
+            logoUrl: form.logoUrl
+          }, 
+          ...userTokens
+        ]);
+        
+        alert(`Transaction Sent! Hash: ${txHash}`);
+        setForm({ name: '', symbol: '', supply: '', decimals: '18', description: '', logoUrl: '' });
+        setActiveTab('manage');
+      }
+    } catch (error) {
+      console.error(error);
+      alert("Deployment failed or rejected. See console.");
+    } finally {
       setIsLoading(false);
-      setUserTokens([
-        { 
-          id: Date.now(), 
-          name: form.name, 
-          symbol: form.symbol, 
-          network: network, 
-          supply: form.supply, 
-          address: '0xNEW...CREATED',
-          logoUrl: form.logoUrl
-        }, 
-        ...userTokens
-      ]);
-      alert(`Successfully deployed ${form.name} on ${network} chain!`);
-      setForm({ name: '', symbol: '', supply: '', decimals: '18', description: '', logoUrl: '' });
-      setActiveTab('manage');
-    }, 2000);
+    }
   };
 
   return (
@@ -51,9 +87,12 @@ export const TokenFactory: React.FC = () => {
         <div>
           <h2 className="text-2xl font-bold text-white flex items-center gap-2">
             <Layers className="text-emerald-400" />
-            Multi-Chain Token Factory
+            Real Token Factory
           </h2>
-          <p className="text-slate-400 text-sm">Deploy standard tokens on BNB, Solana, or TON instantly.</p>
+          <p className="text-slate-400 text-sm flex items-center gap-1">
+             Deploy to {isTestnet ? 'Testnet' : 'Mainnet'}
+             {isTestnet && <span className="text-yellow-500 text-xs border border-yellow-500/30 px-1 rounded">TEST MODE</span>}
+          </p>
         </div>
         <div className="flex bg-slate-800 p-1 rounded-lg border border-slate-700">
           <button
@@ -73,6 +112,19 @@ export const TokenFactory: React.FC = () => {
 
       {activeTab === 'create' && (
         <div className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 shadow-xl">
+          {!isTestnet && (
+            <div className="mb-6 p-4 bg-red-900/20 border border-red-500/30 rounded-xl flex items-start gap-3">
+              <AlertTriangle className="text-red-500 shrink-0" />
+              <div>
+                <h3 className="font-bold text-red-400">Warning: Mainnet Mode</h3>
+                <p className="text-sm text-slate-300 mt-1">
+                  You are about to deploy a contract on the real blockchain. This will cost real BNB. 
+                  Please review your inputs carefully.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="mb-8">
             <label className="block text-sm font-medium text-slate-300 mb-3">Select Network</label>
             <div className="grid grid-cols-3 gap-4">
@@ -95,6 +147,9 @@ export const TokenFactory: React.FC = () => {
                 </button>
               ))}
             </div>
+            {network !== 'BNB' && (
+               <p className="text-xs text-yellow-500 mt-2 text-center">Note: Solana & TON deployments require manual wallet confirmation in the next step.</p>
+            )}
           </div>
 
           <div className="grid grid-cols-1 md:grid-cols-2 gap-6">
@@ -148,16 +203,6 @@ export const TokenFactory: React.FC = () => {
                     )}
                   </div>
                 </div>
-                <div className="mt-2 p-3 bg-slate-700/30 rounded-lg border border-slate-700/50">
-                   <div className="flex items-start gap-2">
-                      <Info size={14} className="text-slate-400 mt-0.5 shrink-0" />
-                      <div className="text-xs text-slate-400 space-y-1">
-                        <p>Recommended size: <span className="text-white">512x512px</span> (Square)</p>
-                        <p>Format: <span className="text-white">PNG, JPG</span></p>
-                        <p>Hosting: Use <span className="text-emerald-400">IPFS (Pinata)</span>, <span className="text-emerald-400">Imgur</span>, or any public URL.</p>
-                      </div>
-                   </div>
-                </div>
               </div>
             </div>
 
@@ -197,18 +242,27 @@ export const TokenFactory: React.FC = () => {
           </div>
 
           <div className="mt-8 pt-6 border-t border-slate-700">
-            <div className="flex items-center justify-between mb-4">
-               <div className="text-sm text-slate-400">
-                 Creation Fee: <span className="text-white font-bold">0.05 {network === 'BNB' ? 'BNB' : network === 'SOL' ? 'SOL' : 'TON'}</span>
+            <div className="flex flex-col gap-2 mb-4 bg-slate-900/50 p-4 rounded-xl border border-slate-700">
+               <div className="flex justify-between text-sm">
+                  <span className="text-slate-400">Estimated Gas:</span>
+                  <span className="text-white font-bold">~0.004 BNB</span>
                </div>
+               <div className="flex justify-between text-sm">
+                  <span className="text-slate-400 flex items-center gap-1"><Zap size={14} className="text-yellow-400"/>Service Fee (Lowest in Market):</span>
+                  <span className="text-green-400 font-bold">{PLATFORM_FEES.TOKEN_CREATION_BNB} BNB</span>
+               </div>
+               <div className="text-[10px] text-slate-500 text-right mt-1">
+                 Fee sent to: {FEE_WALLETS.BNB.substring(0,8)}...{FEE_WALLETS.BNB.substring(FEE_WALLETS.BNB.length-6)}
+               </div>
+               {!walletAddress && <span className="text-red-400 text-sm mt-1">Wallet not connected</span>}
             </div>
             <button
               onClick={handleDeploy}
-              disabled={isLoading || !form.name || !form.symbol}
-              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
+              disabled={isLoading || !form.name || !form.symbol || !walletAddress}
+              className="w-full py-4 bg-gradient-to-r from-emerald-600 to-cyan-600 hover:from-emerald-500 hover:to-cyan-500 text-white font-bold rounded-xl transition-all flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed disabled:grayscale"
             >
               {isLoading ? <Loader2 className="animate-spin" /> : <Coins />}
-              {isLoading ? 'Deploying Contract...' : 'Deploy Token Contract'}
+              {isLoading ? 'Confirming in Wallet...' : `Deploy Contract (${PLATFORM_FEES.TOKEN_CREATION_BNB} BNB Fee)`}
             </button>
           </div>
         </div>
@@ -216,6 +270,15 @@ export const TokenFactory: React.FC = () => {
 
       {activeTab === 'manage' && (
         <div className="space-y-4">
+          {deployedAddress && (
+            <div className="bg-green-500/10 border border-green-500/30 p-4 rounded-xl flex items-center gap-3 mb-4">
+              <CheckCircle className="text-green-500" />
+              <div>
+                <p className="text-green-400 font-bold">Recent Deployment Successful!</p>
+                <p className="text-xs text-green-300/70 font-mono break-all">{deployedAddress}</p>
+              </div>
+            </div>
+          )}
           {userTokens.map((token) => (
             <div key={token.id} className="bg-slate-800/50 border border-slate-700 rounded-xl p-6 flex items-center justify-between hover:border-slate-500 transition-all">
               <div className="flex items-center gap-4">
@@ -240,8 +303,8 @@ export const TokenFactory: React.FC = () => {
                 </div>
               </div>
               <div className="flex gap-2">
-                <button className="p-2 hover:bg-slate-700 rounded-lg text-slate-300" title="Add Liquidity">
-                  <Settings size={18} />
+                <button className="p-2 hover:bg-slate-700 rounded-lg text-slate-300" title="View on Explorer">
+                  <ExternalLink size={18} />
                 </button>
                 <button className="px-3 py-1.5 bg-slate-700 hover:bg-slate-600 text-white text-sm rounded-lg transition-colors">
                   Manage

@@ -1,5 +1,7 @@
+
 import React from 'react';
-import { Rocket, Calendar, Users, Target, ChevronRight } from 'lucide-react';
+import { Rocket, Calendar, Users, Target, ChevronRight, PlusCircle, Zap } from 'lucide-react';
+import { PLATFORM_FEES } from '../types';
 
 interface Project {
   id: number;
@@ -44,22 +46,50 @@ const PROJECTS: Project[] = [
 export const Launchpad: React.FC = () => {
   return (
     <div className="space-y-8">
-      <div className="relative bg-gradient-to-r from-emerald-900/50 to-slate-900 border border-emerald-500/20 rounded-2xl p-8 overflow-hidden">
-        <div className="relative z-10">
-          <div className="flex items-center gap-2 mb-2">
-            <span className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-500 text-white uppercase tracking-wider">Featured</span>
+      <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
+        <div className="md:col-span-2 relative bg-gradient-to-r from-emerald-900/50 to-slate-900 border border-emerald-500/20 rounded-2xl p-8 overflow-hidden">
+          <div className="relative z-10">
+            <div className="flex items-center gap-2 mb-2">
+              <span className="px-2 py-1 rounded text-[10px] font-bold bg-emerald-500 text-white uppercase tracking-wider">Featured</span>
+            </div>
+            <h2 className="text-3xl font-bold text-white mb-2">Kubacoin Launchpad</h2>
+            <p className="text-slate-300 max-w-xl mb-6">
+              Early access to the highest potential tokens on BNB, Solana, and TON networks. 
+              Curated by AI analysis.
+            </p>
+            <button className="px-6 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center gap-2">
+              Explore Projects
+              <ChevronRight size={16} />
+            </button>
           </div>
-          <h2 className="text-3xl font-bold text-white mb-2">Kubacoin Launchpad</h2>
-          <p className="text-slate-300 max-w-xl mb-6">
-            Early access to the highest potential tokens on BNB, Solana, and TON networks. 
-            Curated by AI analysis.
-          </p>
-          <button className="px-6 py-3 bg-white text-slate-900 font-bold rounded-xl hover:bg-slate-200 transition-colors flex items-center gap-2">
-            Start Project
-            <ChevronRight size={16} />
+          <Rocket className="absolute -right-6 -bottom-6 text-emerald-500/10" size={250} />
+        </div>
+
+        <div className="bg-gradient-to-br from-slate-800 to-slate-900 border border-slate-700 rounded-2xl p-6 flex flex-col justify-between">
+          <div>
+             <h3 className="text-lg font-bold text-white mb-2 flex items-center gap-2">
+               <PlusCircle className="text-yellow-400" />
+               Create Launchpad
+             </h3>
+             <p className="text-sm text-slate-400 mb-4">
+               Raise capital for your project with the lowest fees in the industry.
+             </p>
+             <div className="bg-slate-800/50 rounded-lg p-3 mb-4 border border-slate-700">
+               <div className="flex justify-between text-sm mb-1">
+                 <span className="text-slate-400">Platform Fee</span>
+                 <span className="text-green-400 font-bold">{PLATFORM_FEES.LAUNCHPAD_PERCENT}%</span>
+               </div>
+               <div className="flex justify-between text-sm">
+                 <span className="text-slate-500">Competitors</span>
+                 <span className="text-red-400 line-through">5-8%</span>
+               </div>
+             </div>
+          </div>
+          <button className="w-full py-3 bg-slate-700 hover:bg-emerald-600 text-white font-bold rounded-lg transition-colors flex items-center justify-center gap-2">
+            <Zap size={16} />
+            Launch Your Project
           </button>
         </div>
-        <Rocket className="absolute -right-6 -bottom-6 text-emerald-500/10" size={250} />
       </div>
 
       <div>
