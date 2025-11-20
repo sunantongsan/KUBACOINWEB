@@ -14,31 +14,50 @@ export class BlockchainService {
   private signer: ethers.JsonRpcSigner | null = null;
 
   constructor() {
-    if (window.ethereum) {
-      this.provider = new ethers.BrowserProvider(window.ethereum);
-    }
+    // We do NOT initialize provider here anymore to avoid race conditions
+    // where window.ethereum is not yet injected by the extension.
   }
 
   async connectWallet(): Promise<{ address: string; chainId: number } | null> {
-    if (!window.ethereum) {
-      alert("Metamask is not installed!");
+    // 1. Check specifically at the moment of click
+    if (typeof window.ethereum === 'undefined') {
+      alert("Metamask is not detected! Please install it or refresh the page.");
       return null;
     }
+
     try {
+      // 2. Initialize provider FRESH every time we connect
+      // This fixes issues where the provider might be stale
+      this.provider = new ethers.BrowserProvider(window.ethereum);
+
+      // 3. Request Access
       await window.ethereum.request({ method: 'eth_requestAccounts' });
-      if (!this.provider) this.provider = new ethers.BrowserProvider(window.ethereum);
+      
       this.signer = await this.provider.getSigner();
       const address = await this.signer.getAddress();
       const network = await this.provider.getNetwork();
+      
       return { address, chainId: Number(network.chainId) };
-    } catch (error) {
+    } catch (error: any) {
       console.error("Connection failed", error);
+      // Handle user rejection specifically
+      if (error.code === 4001) {
+        alert("Connection rejected by user.");
+      } else {
+        alert("Failed to connect wallet. Please check Metamask.");
+      }
       return null;
     }
   }
 
   async switchNetwork(isTestnet: boolean): Promise<boolean> {
     if (!window.ethereum) return false;
+    
+    // Ensure provider is ready
+    if (!this.provider) {
+        this.provider = new ethers.BrowserProvider(window.ethereum);
+    }
+
     const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
     
     try {
@@ -46,6 +65,9 @@ export class BlockchainService {
         method: 'wallet_switchEthereumChain',
         params: [{ chainId: config.chainId }],
       });
+      // Refresh provider after network switch
+      this.provider = new ethers.BrowserProvider(window.ethereum);
+      this.signer = await this.provider.getSigner();
       return true;
     } catch (switchError: any) {
       if (switchError.code === 4902) {
@@ -66,7 +88,9 @@ export class BlockchainService {
   }
 
   async getBNBBalance(address: string): Promise<string> {
+    if (!window.ethereum) return "0";
     if (!this.provider) this.provider = new ethers.BrowserProvider(window.ethereum);
+    
     try {
       const balance = await this.provider.getBalance(address);
       return ethers.formatEther(balance);
@@ -77,7 +101,9 @@ export class BlockchainService {
   }
 
   async getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
+    if (!window.ethereum) return "0";
     if (!this.provider) this.provider = new ethers.BrowserProvider(window.ethereum);
+    
     try {
       if (!ethers.isAddress(tokenAddress)) return "0";
       
@@ -104,8 +130,9 @@ export class BlockchainService {
     renounceOwnership: boolean, 
     verifyContract: boolean
   ): Promise<string | null> {
-    if (!this.signer) await this.connectWallet();
-    if (!this.signer) throw new Error("Wallet not connected");
+    // Ensure fresh connection
+    const wallet = await this.connectWallet();
+    if (!wallet || !this.signer) throw new Error("Wallet not connected");
 
     try {
       const serviceFee = ethers.parseEther(PLATFORM_FEES.TOKEN_CREATION_BNB); 
@@ -146,8 +173,8 @@ export class BlockchainService {
   }
   
   async swapBNBForTokens(amountIn: string, tokenAddress: string, isTestnet: boolean): Promise<string | null> {
-    if (!this.signer) await this.connectWallet();
-    if (!this.signer) throw new Error("Wallet not connected");
+    const wallet = await this.connectWallet();
+    if (!wallet || !this.signer) throw new Error("Wallet not connected");
 
     try {
       const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
@@ -181,8 +208,8 @@ export class BlockchainService {
   }
 
   async approveToken(tokenAddress: string, amount: string, isTestnet: boolean): Promise<string | null> {
-    if (!this.signer) await this.connectWallet();
-    if (!this.signer) throw new Error("Wallet not connected");
+    const wallet = await this.connectWallet();
+    if (!wallet || !this.signer) throw new Error("Wallet not connected");
 
     try {
        const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
@@ -202,8 +229,8 @@ export class BlockchainService {
   }
 
   async addLiquidity(tokenAddress: string, tokenAmount: string, bnbAmount: string, isTestnet: boolean): Promise<string | null> {
-    if (!this.signer) await this.connectWallet();
-    if (!this.signer) throw new Error("Wallet not connected");
+    const wallet = await this.connectWallet();
+    if (!wallet || !this.signer) throw new Error("Wallet not connected");
 
     try {
       const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
@@ -235,8 +262,8 @@ export class BlockchainService {
   }
 
   async createLaunchpad(tokenAddress: string, hardCap: string): Promise<string | null> {
-    if (!this.signer) await this.connectWallet();
-    if (!this.signer) throw new Error("Wallet not connected");
+    const wallet = await this.connectWallet();
+    if (!wallet || !this.signer) throw new Error("Wallet not connected");
     
     try {
       const serviceFee = ethers.parseEther(PLATFORM_FEES.LAUNCHPAD_CREATION_BNB); 
