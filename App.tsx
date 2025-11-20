@@ -42,7 +42,7 @@ const App: React.FC = () => {
       case View.CHAT:
         return <ChatInterface />;
       case View.EXCHANGE:
-        return <Exchange />;
+        return <Exchange walletAddress={walletAddress} />;
       case View.TOKEN_FACTORY:
         return <TokenFactory isTestnet={isTestnet} walletAddress={walletAddress} blockchainService={blockchainService} />;
       case View.LAUNCHPAD:
@@ -73,12 +73,12 @@ const App: React.FC = () => {
             </div>
             
             <h2 className="text-4xl font-black text-center text-white mb-3 leading-tight">
-              You've Arrived.
-              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200 text-2xl mt-1">The World's Lowest Fees Are Here.</span>
+              Premium Service.
+              <span className="block text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-yellow-200 text-2xl mt-1">Fair & Honest Pricing.</span>
             </h2>
             
             <p className="text-center text-slate-300 mb-8 leading-relaxed">
-              Stop searching. You have found the <span className="text-white font-bold">absolute best rates</span> in the global market. Why pay more elsewhere?
+              Build your crypto project with a reliable partner. We offer professional tools at <span className="text-white font-bold">50% lower cost</span> than major platforms.
             </p>
             
             <div className="space-y-3 mb-8">
@@ -86,16 +86,16 @@ const App: React.FC = () => {
                 <div className="absolute left-0 top-0 bottom-0 w-1 bg-yellow-500"></div>
                 <span className="text-slate-300 font-medium">Trading Fee</span>
                 <div className="flex items-baseline gap-2">
-                   <span className="text-xs text-slate-500 line-through decoration-red-500">0.25%</span>
+                   <span className="text-xs text-slate-500">Competitors 0.3%</span>
                    <span className="text-yellow-400 font-black text-2xl">{PLATFORM_FEES.SWAP_PERCENT}%</span>
                 </div>
               </div>
               
               <div className="flex items-center justify-between bg-slate-800/50 p-3 rounded-lg border border-slate-700">
-                <span className="text-slate-400">Launchpad Fee</span>
+                <span className="text-slate-400">Launchpad Setup</span>
                 <div className="flex items-baseline gap-2">
-                   <span className="text-xs text-slate-500 line-through decoration-red-500">5.0%</span>
-                   <span className="text-green-400 font-bold text-lg">{PLATFORM_FEES.LAUNCHPAD_PERCENT}%</span>
+                   <span className="text-xs text-slate-500 line-through decoration-red-500">1.0 BNB</span>
+                   <span className="text-green-400 font-bold text-lg">{PLATFORM_FEES.LAUNCHPAD_CREATION_BNB} BNB</span>
                 </div>
               </div>
             </div>
@@ -104,11 +104,11 @@ const App: React.FC = () => {
               onClick={() => { setShowPromo(false); setCurrentView(View.EXCHANGE); }}
               className="w-full py-4 bg-gradient-to-r from-yellow-500 via-orange-500 to-yellow-500 hover:from-yellow-400 hover:via-orange-400 hover:to-yellow-400 text-slate-900 font-black text-xl rounded-xl transition-all shadow-lg shadow-orange-500/20 transform hover:scale-[1.02] active:scale-95"
             >
-              Start Trading with Best Rates
+              Start Trading Now
             </button>
             
             <p className="text-center text-xs text-slate-500 mt-4">
-              *Lowest fees guaranteed compared to major DEX standards.
+              *Transparent fee structure. No hidden costs.
             </p>
           </div>
         </div>
