@@ -45,6 +45,7 @@ export interface LaunchpadProject {
   hardcap: number;
   status: 'Live' | 'Upcoming' | 'Ended';
   chain: NetworkId;
+  address?: string; // Added address field
 }
 
 // Extend Window interface for various providers

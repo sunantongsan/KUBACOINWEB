@@ -5,6 +5,7 @@ import { ChartArea } from './components/ChartArea';
 import { Transactions } from './components/Transactions';
 import { TokenForge } from './components/TokenForge';
 import { Launchpad } from './components/Launchpad';
+import { SwapInterface } from './components/SwapInterface';
 import { WalletState, Transaction, TokenData, NetworkId } from './types';
 import { connectWalletAPI, checkWalletInstalled, getBalance, isMobileDevice, getWalletDeepLink } from './services/walletService';
 import { AlertCircle, ShieldCheck, BrainCircuit, ExternalLink } from 'lucide-react';
@@ -129,7 +130,9 @@ const App: React.FC = () => {
           case 'forge':
               return <TokenForge network={wallet.network} isConnected={wallet.isConnected} />;
           case 'launchpad':
-              return <Launchpad />;
+              return <Launchpad wallet={wallet} />;
+          case 'trade':
+              return <SwapInterface wallet={wallet} onConnect={handleConnect} />;
           default:
               return (
                 <div className="animate-slideUp space-y-6">
@@ -151,8 +154,11 @@ const App: React.FC = () => {
                                     </div>
                                 </div>
                                 <div className="flex gap-3">
-                                    <button className="flex-1 md:flex-none px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/10">
-                                        Buy KUBA
+                                    <button 
+                                        onClick={() => setActiveTab('trade')}
+                                        className="flex-1 md:flex-none px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/10"
+                                    >
+                                        Trade / Swap
                                     </button>
                                     <button className="flex-1 md:flex-none px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-colors border border-slate-700">
                                         Send
