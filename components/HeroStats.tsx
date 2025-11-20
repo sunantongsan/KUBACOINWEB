@@ -68,7 +68,7 @@ export const HeroStats: React.FC<HeroStatsProps> = ({ data }) => {
           </div>
         </div>
         <h3 className="text-slate-500 text-xs font-medium uppercase tracking-wider">Liquidity Pool Size</h3>
-        <p className="text-2xl font-bold text-white mt-1">${(data.liquidity / 1000).toFixed(0)}K</p>
+        <p className="text-2xl font-bold text-white mt-1">${(data.liquidity / 1000).toFixed(2)}K</p>
       </div>
     </div>
   );

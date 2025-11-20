@@ -40,11 +40,45 @@ export const Navbar: React.FC<NavbarProps> = ({
   };
 
   const NetworkIcon = ({ n }: { n: NetworkId }) => {
-     let color = 'bg-slate-600';
-     if (n.includes('bnb')) color = 'bg-yellow-500';
-     if (n.includes('solana')) color = 'bg-purple-500';
-     if (n.includes('ton')) color = 'bg-blue-500';
-     return <div className={`w-2 h-2 rounded-full ${color}`} />;
+     const isTestnet = n.includes('testnet') || n.includes('devnet');
+     const size = "w-5 h-5";
+
+     if (n.includes('bnb')) {
+         return (
+             <div className={`${size} relative flex items-center justify-center rounded-full bg-[#F0B90B] text-white shrink-0`}>
+                 <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5">
+                    <path d="M12 15.5L14.5 13L12 10.5L9.5 13L12 15.5ZM12 8.5L14.5 11L12 13.5L9.5 11L12 8.5ZM12 2L7 7L12 12L17 7L12 2ZM7 17L12 22L17 17L12 12L7 17Z" fill="currentColor"/>
+                 </svg>
+                 {isTestnet && <span className="absolute -bottom-0.5 -right-0.5 bg-slate-900 text-[8px] font-bold px-1 leading-none py-0.5 rounded border border-slate-700 text-yellow-500">T</span>}
+             </div>
+         );
+     }
+
+     if (n.includes('solana')) {
+         return (
+             <div className={`${size} relative flex items-center justify-center rounded-full bg-[#141414] border border-slate-700 shrink-0`}>
+                 <svg viewBox="0 0 24 24" fill="none" className="w-3.5 h-3.5">
+                    <path d="M4 7H17L20 4H7L4 7Z" fill="#9945FF"/>
+                    <path d="M4 19H17L20 16H7L4 19Z" fill="#14F195"/>
+                    <path d="M7 13H20L17 10H4L7 13Z" fill="#fff"/>
+                 </svg>
+                 {isTestnet && <span className="absolute -bottom-0.5 -right-0.5 bg-slate-900 text-[8px] font-bold px-1 leading-none py-0.5 rounded border border-slate-700 text-green-400">D</span>}
+             </div>
+         );
+     }
+
+     if (n.includes('ton')) {
+         return (
+             <div className={`${size} relative flex items-center justify-center rounded-full bg-[#0088CC] text-white shrink-0`}>
+                 <svg viewBox="0 0 24 24" fill="none" className="w-3 h-3 ml-0.5">
+                    <path d="M14.5 6.5L5.5 10.5L8.5 11.5L13.5 8.5L9.5 12.5L12.5 15.5L14.5 6.5Z" fill="currentColor"/>
+                 </svg>
+                 {isTestnet && <span className="absolute -bottom-0.5 -right-0.5 bg-slate-900 text-[8px] font-bold px-1 leading-none py-0.5 rounded border border-slate-700 text-blue-300">T</span>}
+             </div>
+         );
+     }
+
+     return <div className={`${size} rounded-full bg-slate-600 shrink-0`} />;
   }
 
   const NavItem = ({ id, label, icon: Icon }: { id: string, label: string, icon: any }) => (
@@ -173,9 +207,11 @@ export const Navbar: React.FC<NavbarProps> = ({
                         key={net}
                         onClick={() => {
                             onNetworkChange(net);
+                            setIsMobileMenuOpen(false);
                         }}
-                        className={`px-3 py-2 rounded-lg text-xs font-medium border ${network === net ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400' : 'bg-slate-900 border-slate-700 text-slate-400'}`}
+                        className={`px-3 py-2 rounded-lg text-xs font-medium border flex items-center gap-2 justify-center ${network === net ? 'bg-yellow-500/10 border-yellow-500 text-yellow-400' : 'bg-slate-900 border-slate-700 text-slate-400'}`}
                     >
+                        <NetworkIcon n={net} />
                         {getNetworkLabel(net)}
                     </button>
                 ))}
