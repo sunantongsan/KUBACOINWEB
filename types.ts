@@ -1,58 +1,34 @@
-export type NetworkId = 'bnb-mainnet' | 'bnb-testnet' | 'solana' | 'solana-devnet' | 'ton' | 'ton-testnet';
 
-export interface WalletState {
-  address: string | null;
-  network: NetworkId;
-  isConnected: boolean;
-  isConnecting: boolean;
-  error: string | null;
-  balance: string;
-  walletType: 'metamask' | 'phantom' | 'tonkeeper' | null;
-}
-
-export interface Transaction {
-  id: string;
-  type: 'Buy' | 'Sell' | 'Transfer' | 'Stake' | 'Mint' | 'Burn';
-  amount: number;
-  date: string;
-  status: 'Completed' | 'Pending' | 'Failed';
-  hash: string;
-}
-
-export interface TokenData {
+export interface CoinData {
+  name: string;
+  symbol: string;
   price: number;
-  marketCap: number;
-  volume24h: number;
   change24h: number;
-  supply: number;
-  liquidity: number; // New field
-  qualityScore: number; // AI Analysis score
+  marketCap: string;
+  volume: string;
 }
 
 export interface ChatMessage {
   id: string;
-  role: 'user' | 'ai';
+  role: 'user' | 'model';
   text: string;
   timestamp: number;
-  isErrorAnalysis?: boolean;
+  isLoading?: boolean;
+  sources?: Array<{ uri: string; title: string }>;
 }
 
-export interface LaunchpadProject {
-  id: string;
-  name: string;
-  symbol: string;
-  raised: number;
-  hardcap: number;
-  status: 'Live' | 'Upcoming' | 'Ended';
-  chain: NetworkId;
-  address?: string; // Added address field
+export enum ProcessingState {
+  IDLE = 'IDLE',
+  LOADING = 'LOADING',
+  SUCCESS = 'SUCCESS',
+  ERROR = 'ERROR',
 }
 
-// Extend Window interface for various providers
-declare global {
-  interface Window {
-    ethereum?: any;
-    solana?: any;
-    ton?: any;
-  }
+export enum View {
+  DASHBOARD = 'DASHBOARD',
+  MARKET_ANALYSIS = 'MARKET_ANALYSIS',
+  CHAT = 'CHAT',
+  EXCHANGE = 'EXCHANGE',
+  TOKEN_FACTORY = 'TOKEN_FACTORY',
+  LAUNCHPAD = 'LAUNCHPAD',
 }

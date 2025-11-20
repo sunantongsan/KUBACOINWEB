@@ -3,64 +3,40 @@
   <head>
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
-    <title>KUBA Forge Ai | Web3 Token Management</title>
+    <title>Kubacoin Web - AI Crypto Dashboard</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <style>
+      @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&display=swap');
       body {
         font-family: 'Inter', sans-serif;
-        background-color: #020617; /* Slate 950 */
-        color: #f8fafc;
+        background-color: #0f172a; /* Slate 900 */
+        color: #e2e8f0; /* Slate 200 */
       }
-      /* Custom Scrollbar */
+      /* Custom scrollbar for webkit */
       ::-webkit-scrollbar {
-        width: 6px;
+        width: 8px;
       }
       ::-webkit-scrollbar-track {
-        background: #0f172a;
+        background: #1e293b; 
       }
       ::-webkit-scrollbar-thumb {
-        background: #334155;
+        background: #475569; 
         border-radius: 4px;
       }
       ::-webkit-scrollbar-thumb:hover {
-        background: #475569;
-      }
-      
-      /* Animations */
-      @keyframes slideUp {
-        from { transform: translateY(20px); opacity: 0; }
-        to { transform: translateY(0); opacity: 1; }
-      }
-      .animate-slideUp {
-        animation: slideUp 0.4s ease-out forwards;
-      }
-      
-      @keyframes pulse-glow {
-        0%, 100% { box-shadow: 0 0 15px rgba(234, 179, 8, 0.1); }
-        50% { box-shadow: 0 0 25px rgba(234, 179, 8, 0.3); }
-      }
-      .animate-pulse-glow {
-        animation: pulse-glow 2s infinite;
+        background: #64748b; 
       }
     </style>
-    <script>
-      // Polyfill process.env to prevent ReferenceError
-      window.process = window.process || { env: { API_KEY: "" } };
-    </script>
-    <script type="importmap">
+  <script type="importmap">
 {
   "imports": {
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom": "https://aistudiocdn.com/react-dom@^19.2.0",
-    "react-dom/client": "https://aistudiocdn.com/react-dom@^19.2.0/client",
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
-    "prop-types": "https://aistudiocdn.com/prop-types@^15.8.1",
     "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.554.0",
     "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "ethers": "https://aistudiocdn.com/ethers@^6.10.0"
+    "react/": "https://aistudiocdn.com/react@^19.2.0/",
+    "react": "https://aistudiocdn.com/react@^19.2.0",
+    "recharts": "https://aistudiocdn.com/recharts@^3.4.1",
+    "react-markdown": "https://aistudiocdn.com/react-markdown@^10.1.0"
   }
 }
 </script>
