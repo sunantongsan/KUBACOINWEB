@@ -1,6 +1,6 @@
 
 import { ethers } from 'ethers';
-import { BNB_MAINNET, BNB_TESTNET, ERC20_ABI, STANDARD_TOKEN_BYTECODE, FEE_WALLETS, PLATFORM_FEES } from '../types';
+import { BNB_MAINNET, BNB_TESTNET, ERC20_ABI, STANDARD_TOKEN_BYTECODE, FEE_WALLETS, PLATFORM_FEES, ROUTER_ABI } from '../types';
 
 declare global {
   interface Window {
@@ -48,7 +48,6 @@ export class BlockchainService {
       });
       return true;
     } catch (switchError: any) {
-      // This error code indicates that the chain has not been added to MetaMask.
       if (switchError.code === 4902) {
         try {
           await window.ethereum.request({
@@ -66,49 +65,193 @@ export class BlockchainService {
     }
   }
 
-  async deployToken(name: string, symbol: string, initialSupply: string): Promise<string | null> {
+  async getBNBBalance(address: string): Promise<string> {
+    if (!this.provider) this.provider = new ethers.BrowserProvider(window.ethereum);
+    try {
+      const balance = await this.provider.getBalance(address);
+      return ethers.formatEther(balance);
+    } catch (error) {
+      console.error("Get BNB Balance Error:", error);
+      return "0";
+    }
+  }
+
+  async getTokenBalance(tokenAddress: string, walletAddress: string): Promise<string> {
+    if (!this.provider) this.provider = new ethers.BrowserProvider(window.ethereum);
+    try {
+      if (!ethers.isAddress(tokenAddress)) return "0";
+      
+      const contract = new ethers.Contract(tokenAddress, ERC20_ABI, this.provider);
+      const balance = await contract.balanceOf(walletAddress);
+      
+      // Attempt to get decimals, default to 18 if fails
+      let decimals = 18;
+      try {
+        decimals = await contract.decimals();
+      } catch {}
+      
+      return ethers.formatUnits(balance, decimals);
+    } catch (error) {
+      console.error("Get Token Balance Error:", error);
+      return "0";
+    }
+  }
+
+  async deployToken(
+    name: string, 
+    symbol: string, 
+    initialSupply: string, 
+    renounceOwnership: boolean, 
+    verifyContract: boolean
+  ): Promise<string | null> {
     if (!this.signer) await this.connectWallet();
-    if (!this.signer) return null;
+    if (!this.signer) throw new Error("Wallet not connected");
 
     try {
-      // 1. Service Fee Transaction (Send to Admin)
       const serviceFee = ethers.parseEther(PLATFORM_FEES.TOKEN_CREATION_BNB); 
       const adminWallet = FEE_WALLETS.BNB;
 
-      alert(`Please confirm the Service Fee transaction (${PLATFORM_FEES.TOKEN_CREATION_BNB} BNB) to ${adminWallet}`);
-      
+      // 1. FEE PAYMENT (Real transaction)
+      console.log("Processing Service Fee...");
       const feeTx = await this.signer.sendTransaction({
         to: adminWallet,
         value: serviceFee
       });
+      await feeTx.wait(); // Wait for fee to be confirmed
       
-      // Wait for fee payment confirmation
-      await feeTx.wait();
-      alert("Service Fee Paid! Proceeding to deploy contract...");
+      // 2. DEPLOY CONTRACT (Real Contract Factory)
+      console.log("Deploying Token Contract...");
+      // Validate Bytecode integrity simply
+      if (!STANDARD_TOKEN_BYTECODE || (STANDARD_TOKEN_BYTECODE as string) === "0x") {
+          throw new Error("Invalid Contract Bytecode. Please contact support.");
+      }
 
-      // 2. Deploy Contract Simulation (or Real if bytecode was complete)
-      // In this web implementation, we are simulating the deployment transaction 
-      // to allow the user to experience the flow without downloading 10MB of Solc.
+      const factory = new ethers.ContractFactory(ERC20_ABI, STANDARD_TOKEN_BYTECODE, this.signer);
       
-      // For demonstration, we send a 0 value transaction to self to simulate "Contract Creation" gas usage
-      const deployTx = await this.signer.sendTransaction({
-        to: await this.signer.getAddress(), // Simulate self-send as deploy for this demo
-        value: 0,
-        data: "0x" // Empty data implies simple transfer, in real deploy this would be the huge BYTECODE string
-      });
+      // Parse supply to Wei (assuming 18 decimals)
+      const supplyWei = ethers.parseUnits(initialSupply, 18); 
       
-      await deployTx.wait();
-      return deployTx.hash; 
+      const contract = await factory.deploy(name, symbol, supplyWei);
+      await contract.waitForDeployment();
       
-    } catch (error) {
-      console.error("Deployment/Fee Payment failed:", error);
-      throw error;
+      const address = await contract.getAddress();
+      console.log("Token Deployed at:", address);
+      
+      return address;
+
+    } catch (error: any) {
+      console.error("Deployment Real Error:", error);
+      throw error; 
     }
   }
   
-  async getBalance(address: string): Promise<string> {
-     if(!this.provider) return "0";
-     const balance = await this.provider.getBalance(address);
-     return ethers.formatEther(balance);
+  async swapBNBForTokens(amountIn: string, tokenAddress: string, isTestnet: boolean): Promise<string | null> {
+    if (!this.signer) await this.connectWallet();
+    if (!this.signer) throw new Error("Wallet not connected");
+
+    try {
+      const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
+      const routerAddress = config.pancakeRouter;
+      const wbnbAddress = config.wbnb;
+
+      const routerContract = new ethers.Contract(routerAddress, ROUTER_ABI, this.signer);
+      const amountInWei = ethers.parseEther(amountIn);
+      const path = [wbnbAddress, tokenAddress];
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 20; // 20 mins
+      const amountOutMin = 0; // Slippage 100% for test
+
+      console.log(`Swapping ${amountIn} BNB via Router: ${routerAddress}`);
+
+      const tx = await routerContract.swapExactETHForTokens(
+        amountOutMin,
+        path,
+        await this.signer.getAddress(),
+        deadline,
+        { value: amountInWei }
+      );
+
+      console.log("Swap Tx Sent:", tx.hash);
+      await tx.wait(); 
+      return tx.hash;
+
+    } catch (error) {
+      console.error("Swap Failed:", error);
+      throw error;
+    }
+  }
+
+  async approveToken(tokenAddress: string, amount: string, isTestnet: boolean): Promise<string | null> {
+    if (!this.signer) await this.connectWallet();
+    if (!this.signer) throw new Error("Wallet not connected");
+
+    try {
+       const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
+       const routerAddress = config.pancakeRouter;
+       
+       const tokenContract = new ethers.Contract(tokenAddress, ERC20_ABI, this.signer);
+       const amountWei = ethers.MaxUint256; // Max approve
+       
+       console.log(`Approving ${tokenAddress} for Router...`);
+       const tx = await tokenContract.approve(routerAddress, amountWei);
+       await tx.wait();
+       return tx.hash;
+    } catch (error) {
+       console.error("Approve Failed:", error);
+       throw error;
+    }
+  }
+
+  async addLiquidity(tokenAddress: string, tokenAmount: string, bnbAmount: string, isTestnet: boolean): Promise<string | null> {
+    if (!this.signer) await this.connectWallet();
+    if (!this.signer) throw new Error("Wallet not connected");
+
+    try {
+      const config = isTestnet ? BNB_TESTNET : BNB_MAINNET;
+      const routerAddress = config.pancakeRouter;
+      
+      const tokenAmountWei = ethers.parseUnits(tokenAmount, 18); // Assume 18 decimals
+      const bnbAmountWei = ethers.parseEther(bnbAmount);
+      const deadline = Math.floor(Date.now() / 1000) + 60 * 20;
+
+      const routerContract = new ethers.Contract(routerAddress, ROUTER_ABI, this.signer);
+      
+      console.log("Adding Liquidity...");
+      const tx = await routerContract.addLiquidityETH(
+          tokenAddress,
+          tokenAmountWei,
+          0, // Slippage 100% allowed for ease of use in V1
+          0, 
+          await this.signer.getAddress(),
+          deadline,
+          { value: bnbAmountWei }
+      );
+      await tx.wait();
+      return tx.hash;
+
+    } catch (error) {
+      console.error("Add Liquidity Failed:", error);
+      throw error;
+    }
+  }
+
+  async createLaunchpad(tokenAddress: string, hardCap: string): Promise<string | null> {
+    if (!this.signer) await this.connectWallet();
+    if (!this.signer) throw new Error("Wallet not connected");
+    
+    try {
+      const serviceFee = ethers.parseEther(PLATFORM_FEES.LAUNCHPAD_CREATION_BNB); 
+      const adminWallet = FEE_WALLETS.BNB;
+      
+      console.log("Paying Launchpad Fee...");
+      const tx = await this.signer.sendTransaction({
+        to: adminWallet,
+        value: serviceFee
+      });
+      await tx.wait();
+      return tx.hash;
+    } catch (error) {
+      console.error("Launchpad Creation Failed:", error);
+      throw error;
+    }
   }
 }
