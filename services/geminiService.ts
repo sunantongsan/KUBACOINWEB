@@ -1,98 +1,70 @@
+import { GoogleGenAI, GenerateContentResponse, Chat } from "@google/genai";
 
-import { GoogleGenAI, Chat } from "@google/genai";
-
-let chatSession: Chat | null = null;
-
-export const initGeminiChat = () => {
+// Initialize the client safely
+const getClient = () => {
   const apiKey = process.env.API_KEY;
   if (!apiKey) {
-      console.warn("Gemini API Key is missing. AI features will be disabled.");
-      return;
+    console.error("API_KEY is missing in environment variables.");
+    return null;
   }
+  return new GoogleGenAI({ apiKey });
+};
+
+export const getCryptoNewsAndAnalysis = async (topic: string = "crypto market news"): Promise<{ text: string; sources?: any[] }> => {
+  const client = getClient();
+  if (!client) return { text: "API Key missing. Please check configuration." };
 
   try {
-      const ai = new GoogleGenAI({ apiKey });
-      chatSession = ai.chats.create({
-        model: 'gemini-2.5-flash',
+    // Using gemini-2.5-flash for speed with search tools
+    const response = await client.models.generateContent({
+      model: "gemini-2.5-flash",
+      contents: `Provide a concise summary of the latest news and trends regarding: ${topic}. 
+      Focus on price movements of major coins (BTC, ETH, KUB) and any regulatory news.
+      Format with clear bullet points using Markdown.`,
+      config: {
+        tools: [{ googleSearch: {} }],
+        thinkingConfig: { thinkingBudget: 0 } // Disable thinking for faster simple queries
+      },
+    });
+
+    const text = response.text || "No analysis available.";
+    const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.web).filter(Boolean) || [];
+
+    return { text, sources };
+  } catch (error) {
+    console.error("Error fetching crypto analysis:", error);
+    return { text: "Failed to retrieve latest market data. Please try again later." };
+  }
+};
+
+// Chat instance interface
+export class CryptoChatService {
+  private chat: Chat | null = null;
+
+  constructor() {
+    const client = getClient();
+    if (client) {
+      this.chat = client.chats.create({
+        model: "gemini-2.5-flash",
         config: {
-          systemInstruction: `
-            You are "KUBA Forge Ai", an advanced Blockchain and Smart Contract expert assistant.
-            Your mission is to assist users in creating, managing, and auditing tokens on BNB, Solana, and TON networks.
-            
-            **CORE INSTRUCTIONS:**
-            1. **LANGUAGE ADAPTABILITY:** You MUST detect the language of the user's input and respond in the SAME language. 
-               - If the user asks in Thai, reply in Thai.
-               - If the user asks in English, reply in English.
-            
-            2. **CAPABILITIES:**
-               - Guide users through Token Creation, Liquidity Addition, Burning, Locking, and Bridging.
-               - Explain error messages clearly.
-               - Provide Tokenomics advice.
-               - Audit Smart Contracts for security vulnerabilities.
-            
-            3. **CODING:**
-               - If asked for code, provide Solidity (BNB), Rust/Anchor (Solana), or FunC/Tact (TON).
-            
-            4. **FEES:**
-               - If asked about fees, mention that the platform charges a 3% Development Fee on top of network gas fees.
-               
-            Keep your tone professional, helpful, and technically accurate.
-          `,
-        },
+          systemInstruction: "You are Kubacoin AI, a helpful and knowledgeable cryptocurrency assistant. You help users understand blockchain technology, analyze market trends, and find information about coins like Bitcoin, Ethereum, and Bitkub Coin (KUB). You can use Google Search to find real-time info. Keep answers concise and helpful.",
+          tools: [{ googleSearch: {} }]
+        }
       });
-  } catch (error) {
-      console.error("Failed to initialize Gemini Chat:", error);
-      chatSession = null;
-  }
-};
-
-export const sendMessageToGemini = async (message: string): Promise<string> => {
-  if (!chatSession) {
-    initGeminiChat();
-  }
-  
-  if (!chatSession) {
-      return "⚠️ AI Unavailable: API Key not found or configuration error. Please check your Vercel settings.";
+    }
   }
 
-  try {
-    const response = await chatSession.sendMessage({ message });
-    return response.text || "Sorry, I could not process a response.";
-  } catch (error) {
-    console.error("Gemini Error:", error);
-    return "⚠️ Connection error with AI. Please try refreshing the page.";
-  }
-};
+  async sendMessage(message: string): Promise<{ text: string; sources?: any[] }> {
+    if (!this.chat) return { text: "Chat service not initialized (missing API Key)." };
 
-export const analyzeErrorWithGemini = async (errorMsg: string, context: string): Promise<string> => {
-     return sendMessageToGemini(`User encountered an error: "${errorMsg}" while doing: "${context}". Please explain the cause and solution.`);
+    try {
+      const response: GenerateContentResponse = await this.chat.sendMessage({ message });
+      const text = response.text || "I couldn't generate a response.";
+      const sources = response.candidates?.[0]?.groundingMetadata?.groundingChunks?.map((chunk: any) => chunk.web).filter(Boolean) || [];
+      return { text, sources };
+    } catch (error) {
+      console.error("Chat error:", error);
+      return { text: "Sorry, I encountered an error connecting to the network." };
+    }
+  }
 }
-
-export const analyzeContractCode = async (code: string, chain: string, address?: string): Promise<string> => {
-  return sendMessageToGemini(`
-    Act as a Lead Smart Contract Security Auditor (KUBA Forge Security Bot).
-    
-    **Target:** ${chain} Token
-    **Address:** ${address || 'Not Provided'}
-
-    Analyze the provided Code/ABI below deeply. Do not just verify syntax; look for logic flaws, economic exploits, and centralization risks.
-
-    **Report Requirements:**
-    Provide a structured audit report in the USER'S Language.
-    
-    ### 🛡️ Security & Vulnerability Analysis
-    - Identify Critical, High, Medium, and Low severity issues.
-
-    ### ⚖️ Centralization & Governance Risks
-    - Can the owner mint unlimited tokens?
-    - Is ownership renounceable?
-
-    ### ✅ Best Practices & Optimization
-    - Does it follow standard implementations?
-
-    ### 📊 KUBA Audit Score: [0-100]
-    
-    **Code Snippet to Audit:**
-    ${code.substring(0, 12000)}
-  `);
-};
