@@ -1,523 +1,289 @@
-import React, { useState, useEffect } from 'react';
-import { ViewState, TokenData, NetworkMode, LaunchpadProject, ChainType } from './types';
-import { TokenCreator } from './components/TokenCreator';
-import { ManageToken } from './components/ManageToken';
-import { AiAssistant } from './components/AiAssistant';
+import React, { useEffect, useState } from 'react';
+import { Navbar } from './components/Navbar';
+import { HeroStats } from './components/HeroStats';
+import { ChartArea } from './components/ChartArea';
+import { Transactions } from './components/Transactions';
+import { TokenForge } from './components/TokenForge';
 import { Launchpad } from './components/Launchpad';
-import { TradeInterface } from './components/TradeInterface';
-import { TokenQualityBadge } from './components/TokenQualityBadge';
-import { LayoutGrid, PlusCircle, Wallet, Layers, Rocket, TrendingUp, LogOut, Loader2, Search, X, Zap, ToggleLeft, ToggleRight } from 'lucide-react';
-import { CHAIN_CONFIG } from './constants';
+import { WalletState, Transaction, TokenData, NetworkId } from './types';
+import { connectWalletAPI, checkWalletInstalled, getBalance, isMobileDevice, getWalletDeepLink } from './services/walletService';
+import { AlertCircle, ShieldCheck, BrainCircuit, ExternalLink } from 'lucide-react';
 
-// REAL WEB3 IMPORTS
-import { useAccount, useConnect, useDisconnect } from 'wagmi';
-
-// Helper to parse dates from JSON
-const dateReviver = (key: string, value: any) => {
-    if (typeof value === 'string' && /^\d{4}-\d{2}-\d{2}T/.test(value)) {
-        return new Date(value);
-    }
-    return value;
+const MOCK_TOKEN_DATA: TokenData = {
+  price: 0.5824,
+  marketCap: 12500000,
+  volume24h: 450200,
+  change24h: 5.24,
+  supply: 100000000,
+  liquidity: 850000,
+  qualityScore: 92
 };
 
-function App() {
-  const [view, setView] = useState<ViewState>(ViewState.DASHBOARD);
-  
-  // Load initial state from LocalStorage if available
-  const [myTokens, setMyTokens] = useState<TokenData[]>(() => {
-      try {
-          const saved = localStorage.getItem('kuba_my_tokens');
-          return saved ? JSON.parse(saved, dateReviver) : [];
-      } catch (e) {
-          console.error("Failed to load tokens", e);
-          return [];
-      }
+const MOCK_TRANSACTIONS: Transaction[] = [
+  { id: '1', type: 'Buy', amount: 500, date: '2023-10-24 14:30', status: 'Completed', hash: '0x7a9f3b21c8d2e4f5a6b7c8d9e0f1a2b3c4d5e6f7' },
+  { id: '2', type: 'Stake', amount: 2000, date: '2023-10-24 10:00', status: 'Completed', hash: '0x4c112233445566778899aabbccddeeff00112233' },
+  { id: '3', type: 'Sell', amount: 120, date: '2023-10-23 09:15', status: 'Completed', hash: '0x3c9a12b3c4d5e6f7a8b9c0d1e2f3a4b5c6d7e8f9' },
+];
+
+const App: React.FC = () => {
+  const [activeTab, setActiveTab] = useState('dashboard');
+  const [wallet, setWallet] = useState<WalletState>({
+    address: null,
+    network: 'bnb-mainnet',
+    isConnected: false,
+    isConnecting: false,
+    error: null,
+    balance: '0',
+    walletType: null
   });
+  const [transactions, setTransactions] = useState<Transaction[]>([]);
 
-  const [launchpads, setLaunchpads] = useState<LaunchpadProject[]>(() => {
-      try {
-          const saved = localStorage.getItem('kuba_launchpads');
-          return saved ? JSON.parse(saved, dateReviver) : [];
-      } catch (e) {
-          console.error("Failed to load launchpads", e);
-          return [];
-      }
-  });
+  // Handle Wallet Connection
+  const handleConnect = async () => {
+    setWallet(prev => ({ ...prev, isConnecting: true, error: null }));
 
-  const [selectedToken, setSelectedToken] = useState<TokenData | null>(null);
-  
-  // Search State
-  const [searchQuery, setSearchQuery] = useState('');
-  
-  // Mock Data for "Live Market" Section
-  const [marketTokens, setMarketTokens] = useState<TokenData[]>([]);
-
-  // WALLET STATE
-  const [isSimulationMode, setIsSimulationMode] = useState(true); // Default to Simulation
-  const [walletAddress, setWalletAddress] = useState<string | null>(null);
-  const [walletChain, setWalletChain] = useState<ChainType | null>(null);
-  const [isConnectModalOpen, setIsConnectModalOpen] = useState(false);
-  const [isConnecting, setIsConnecting] = useState(false);
-
-  // REAL WEB3 HOOKS
-  const { address: realAddress, isConnected: isRealConnected } = useAccount();
-  const { connect: connectReal, connectors } = useConnect();
-  const { disconnect: disconnectReal } = useDisconnect();
-
-  // Effect to sync Real Wallet state
-  useEffect(() => {
-    if (!isSimulationMode && isRealConnected && realAddress) {
-      setWalletAddress(realAddress);
-      setWalletChain(ChainType.BNB); // Defaulting to BNB for initial integration
-    } else if (!isSimulationMode && !isRealConnected) {
-      setWalletAddress(null);
-    }
-  }, [isRealConnected, realAddress, isSimulationMode]);
-
-  // Persist Data whenever it changes
-  useEffect(() => {
-      localStorage.setItem('kuba_my_tokens', JSON.stringify(myTokens));
-  }, [myTokens]);
-
-  useEffect(() => {
-      localStorage.setItem('kuba_launchpads', JSON.stringify(launchpads));
-  }, [launchpads]);
-
-  useEffect(() => {
-      // Generate mock data
-      const chains = [ChainType.BNB, ChainType.SOL, ChainType.TON];
-      const generated: TokenData[] = Array.from({length: 6}, (_, i) => ({
-          id: `market-${i}`,
-          name: ['DragonCoin', 'SolPepe', 'TonGem', 'KubaGold', 'SafeMoon2', 'RocketX'][i],
-          symbol: ['DRG', 'SPEPE', 'TGEM', 'KGOLD', 'SFM2', 'RCKT'][i],
-          supply: 1000000000,
-          chain: chains[i % 3],
-          networkMode: NetworkMode.MAINNET,
-          logoUrl: null,
-          createdAt: new Date(),
-          status: 'active',
-          liquidityLocked: i % 2 === 0,
-          contractAddress: i % 3 !== 0 ? '0xMockAddress...' : undefined,
-          ownershipRenounced: i === 0 || i === 3,
-          currentPrice: Math.random() * 0.5,
-          liquidityUSD: Math.random() * 50000 + 10000,
-          transactions: []
-      }));
-      setMarketTokens(generated);
-
-      // Mock Launchpads initial data (only if empty)
-      if (launchpads.length === 0 && !localStorage.getItem('kuba_launchpads')) {
-          const mockLp: LaunchpadProject = {
-              id: 'lp-mock-1',
-              tokenId: 'market-0',
-              tokenName: 'DragonCoin',
-              tokenSymbol: 'DRG',
-              logoUrl: null,
-              chain: ChainType.BNB,
-              softCap: 50,
-              hardCap: 200,
-              rate: 5000,
-              raisedAmount: 125,
-              startTime: new Date(),
-              endTime: new Date(Date.now() + 86400000 * 3),
-              status: 'LIVE',
-              participants: 450
-          };
-          setLaunchpads([mockLp]);
-      }
-  }, []);
-
-  const handleTokenCreated = (newToken: TokenData) => {
-    setMyTokens([newToken, ...myTokens]);
-    setView(ViewState.DASHBOARD);
-    
-    if (newToken.status === 'deploying') {
-      setTimeout(() => {
-        setMyTokens(prev => prev.map(t => t.id === newToken.id ? { ...t, status: 'active' } : t));
-      }, 3000);
-    }
-  };
-
-  const handleManageToken = (token: TokenData) => {
-    setSelectedToken(token);
-    setView(ViewState.MANAGE_TOKEN);
-  };
-
-  const handleUpdateToken = (updatedToken: TokenData) => {
-    const updatedList = myTokens.map(t => t.id === updatedToken.id ? updatedToken : t);
-    setMyTokens(updatedList);
-    localStorage.setItem('kuba_my_tokens', JSON.stringify(updatedList));
-    
-    if (selectedToken && selectedToken.id === updatedToken.id) {
-      setSelectedToken(updatedToken);
-    }
-  };
-
-  const handleCreateLaunchpad = (project: LaunchpadProject) => {
-    setLaunchpads([project, ...launchpads]);
-  };
-
-  // Wallet Functions
-  const handleConnect = async (chain: ChainType) => {
-      setIsConnecting(true);
-
-      if (!isSimulationMode) {
-        // REAL WALLET CONNECTION
-        const connector = connectors[0]; // Usually Injected (MetaMask)
-        if (connector) {
-            try {
-                connectReal({ connector });
-                // State update handled by useEffect
-            } catch (error) {
-                console.error("Real connection failed", error);
-                alert("Failed to connect real wallet. Make sure you have MetaMask installed.");
+    try {
+        const isInstalled = checkWalletInstalled(wallet.network);
+        
+        if (!isInstalled) {
+            // Check if mobile to attempt deep link
+            if (isMobileDevice()) {
+                const deepLink = getWalletDeepLink(wallet.network);
+                if (deepLink) {
+                    // Redirect to wallet app
+                    window.location.href = deepLink;
+                    // Stop loading state after a brief moment as user leaves app
+                    setTimeout(() => {
+                         setWallet(prev => ({ 
+                             ...prev, 
+                             isConnecting: false, 
+                             error: "Redirecting to wallet app..." 
+                         }));
+                    }, 3000);
+                    return;
+                }
             }
-        } else {
-            alert("No wallet found. Please install MetaMask.");
+
+            let msg = "Wallet not found.";
+            if (wallet.network.includes('bnb')) msg = "MetaMask not found. Please install the extension.";
+            if (wallet.network.includes('solana')) msg = "Phantom Wallet not found. Please install the extension.";
+            if (wallet.network.includes('ton')) msg = "Tonkeeper not found. Please install the extension.";
+            throw new Error(msg);
         }
-        setIsConnecting(false);
-        setIsConnectModalOpen(false);
-        return;
-      }
-      
-      // SIMULATION CONNECTION
-      await new Promise(resolve => setTimeout(resolve, 1000));
-      setWalletChain(chain);
-      let mockAddr = "";
-      if(chain === ChainType.BNB) mockAddr = "0x71C...9A21";
-      if(chain === ChainType.SOL) mockAddr = "AuX...9k2P";
-      if(chain === ChainType.TON) mockAddr = "EQD...j82Z";
-      setWalletAddress(mockAddr);
-      setIsConnecting(false);
-      setIsConnectModalOpen(false);
+
+        const { address, walletType } = await connectWalletAPI(wallet.network);
+        const balance = await getBalance(address, wallet.network);
+
+        setWallet(prev => ({
+            ...prev,
+            address,
+            isConnected: true,
+            isConnecting: false,
+            walletType,
+            balance,
+            error: null
+        }));
+        setTransactions(MOCK_TRANSACTIONS);
+
+    } catch (err: any) {
+        setWallet(prev => ({
+            ...prev,
+            isConnecting: false,
+            error: err.message || 'Connection Failed'
+        }));
+    }
   };
 
   const handleDisconnect = () => {
-      if (!isSimulationMode) {
-          disconnectReal();
+    setWallet(prev => ({
+        ...prev,
+        address: null,
+        isConnected: false,
+        walletType: null,
+        balance: '0'
+    }));
+    setTransactions([]);
+  };
+
+  const handleNetworkChange = async (newNetwork: NetworkId) => {
+      if (wallet.isConnected) handleDisconnect();
+      setWallet(prev => ({ ...prev, network: newNetwork, error: null }));
+  };
+
+  useEffect(() => {
+      // Auto-detect environment logic (simplified)
+      if (window.ethereum) {
+          window.ethereum.on('accountsChanged', (accounts: string[]) => {
+              if (accounts.length === 0) handleDisconnect();
+              else if (wallet.isConnected && wallet.network.includes('bnb')) {
+                   setWallet(prev => ({...prev, address: accounts[0]}));
+              }
+          });
+          window.ethereum.on('chainChanged', () => window.location.reload());
       }
-      setWalletAddress(null);
-      setWalletChain(null);
-  };
+  }, [wallet.isConnected, wallet.network]);
 
-  const getContextHint = () => {
-    if (view === ViewState.CREATE_TOKEN) return "Creating a new token form";
-    if (view === ViewState.MANAGE_TOKEN && selectedToken) return `Managing token ${selectedToken.symbol} on ${selectedToken.chain}`;
-    if (view === ViewState.LAUNCHPAD) return "Viewing Launchpad Projects";
-    if (view === ViewState.TRADE) return "Trading on DEX Interface";
-    return "Dashboard overview";
-  };
-
-  const filteredMarketTokens = marketTokens.filter(token => 
-    token.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    token.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  const filteredMyTokens = myTokens.filter(token => 
-    token.name.toLowerCase().includes(searchQuery.toLowerCase()) || 
-    token.symbol.toLowerCase().includes(searchQuery.toLowerCase())
-  );
-
-  return (
-    <div className="min-h-screen bg-darker text-gray-200 font-sans selection:bg-yellow-500/30">
-      {/* Navbar */}
-      <nav className="bg-card/80 backdrop-blur-md border-b border-gray-800 sticky top-0 z-40">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          <div className="flex items-center gap-8">
-            {/* Logo */}
-            <div className="flex items-center gap-2 cursor-pointer group" onClick={() => setView(ViewState.DASHBOARD)}>
-                <div className="w-8 h-8 bg-gradient-to-br from-yellow-400 to-orange-600 rounded-lg flex items-center justify-center shadow-lg shadow-yellow-500/20 group-hover:scale-105 transition-transform">
-                <Layers className="text-black w-5 h-5" />
-                </div>
-                <span className="text-xl font-bold bg-clip-text text-transparent bg-gradient-to-r from-yellow-400 to-orange-400 hidden md:block">
-                KUBA Forge Ai
-                </span>
-            </div>
-
-            {/* Main Nav Links */}
-            <div className="hidden md:flex items-center gap-1">
-                <button 
-                    onClick={() => setView(ViewState.DASHBOARD)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors ${view === ViewState.DASHBOARD ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-white'}`}
-                >
-                    Dashboard
-                </button>
-                <button 
-                    onClick={() => setView(ViewState.TRADE)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${view === ViewState.TRADE ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <TrendingUp className="w-4 h-4" /> Trade
-                </button>
-                <button 
-                    onClick={() => setView(ViewState.LAUNCHPAD)}
-                    className={`px-4 py-2 rounded-lg text-sm font-medium transition-colors flex items-center gap-1 ${view === ViewState.LAUNCHPAD ? 'text-yellow-400 bg-yellow-500/10' : 'text-gray-400 hover:text-white'}`}
-                >
-                    <Rocket className="w-4 h-4" /> Launchpad
-                </button>
-            </div>
-          </div>
-          
-          <div className="flex items-center gap-3">
-            <button 
-                onClick={() => setView(ViewState.CREATE_TOKEN)}
-                className="hidden sm:flex items-center gap-1 text-sm font-bold text-black bg-yellow-500 hover:bg-yellow-400 px-4 py-2 rounded-full transition-colors shadow-lg shadow-yellow-500/20"
-            >
-                <PlusCircle className="w-4 h-4" /> Create Token
-            </button>
-
-            {/* Wallet Button */}
-            {walletAddress ? (
-                 <button 
-                    onClick={handleDisconnect}
-                    className="flex items-center gap-2 bg-slate-800 hover:bg-red-900/50 border border-green-500/50 hover:border-red-500/50 px-4 py-2 rounded-full transition-all group"
-                 >
-                    <div className="w-2 h-2 rounded-full bg-green-500 animate-pulse"></div>
-                    <span className="text-sm font-mono font-bold text-green-400 group-hover:text-red-400">
-                        {walletAddress.slice(0,6)}...{walletAddress.slice(-4)}
-                    </span>
-                    <LogOut className="w-4 h-4 text-gray-500 group-hover:text-red-400 ml-1" />
-                 </button>
-            ) : (
-                <button 
-                    onClick={() => setIsConnectModalOpen(true)}
-                    className="flex items-center gap-2 bg-slate-800 hover:bg-slate-700 border border-slate-600 hover:border-yellow-500/50 px-4 py-2 rounded-full transition-all group"
-                >
-                    <Wallet className="w-4 h-4 text-yellow-400 group-hover:text-yellow-300" />
-                    <span className="text-sm font-medium group-hover:text-yellow-100">Connect Wallet</span>
-                </button>
-            )}
-          </div>
-        </div>
-
-        {/* Mobile Nav Strip */}
-        <div className="md:hidden flex justify-around border-t border-gray-800 bg-dark/50 backdrop-blur">
-            <button onClick={() => setView(ViewState.DASHBOARD)} className={`p-3 flex flex-col items-center text-[10px] ${view === ViewState.DASHBOARD ? 'text-yellow-500' : 'text-gray-500'}`}><LayoutGrid className="w-5 h-5 mb-1"/>Dash</button>
-            <button onClick={() => setView(ViewState.TRADE)} className={`p-3 flex flex-col items-center text-[10px] ${view === ViewState.TRADE ? 'text-yellow-500' : 'text-gray-500'}`}><TrendingUp className="w-5 h-5 mb-1"/>Trade</button>
-            <button onClick={() => setView(ViewState.LAUNCHPAD)} className={`p-3 flex flex-col items-center text-[10px] ${view === ViewState.LAUNCHPAD ? 'text-yellow-500' : 'text-gray-500'}`}><Rocket className="w-5 h-5 mb-1"/>Launch</button>
-            <button onClick={() => setView(ViewState.CREATE_TOKEN)} className={`p-3 flex flex-col items-center text-[10px] ${view === ViewState.CREATE_TOKEN ? 'text-yellow-500' : 'text-gray-500'}`}><PlusCircle className="w-5 h-5 mb-1"/>Create</button>
-        </div>
-      </nav>
-
-      {/* Wallet Modal */}
-      {isConnectModalOpen && (
-          <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm animate-fade-in">
-              <div className="bg-card border border-gray-700 rounded-2xl p-6 w-full max-w-md shadow-2xl relative">
-                  <button onClick={() => setIsConnectModalOpen(false)} className="absolute top-4 right-4 text-gray-500 hover:text-white">
-                      <X className="w-6 h-6" />
-                  </button>
-                  
-                  <div className="mb-6">
-                    <h2 className="text-2xl font-bold text-white flex items-center gap-2">
-                        <Wallet className="w-6 h-6 text-yellow-500" /> Connect Wallet
-                    </h2>
-                    <p className="text-gray-400 text-sm mt-1">Select connection mode and network.</p>
-                  </div>
-
-                  {/* SIMULATION TOGGLE SWITCH */}
-                  <div className="bg-slate-900 p-3 rounded-xl border border-gray-800 mb-6 flex items-center justify-between">
-                    <div className="flex items-center gap-2">
-                        <Zap className={`w-5 h-5 ${isSimulationMode ? 'text-green-400' : 'text-gray-500'}`} />
-                        <span className="text-sm font-bold text-gray-300">Simulation Mode</span>
-                    </div>
-                    <button 
-                        onClick={() => setIsSimulationMode(!isSimulationMode)}
-                        className="transition-colors"
-                    >
-                        {isSimulationMode ? (
-                            <ToggleRight className="w-10 h-10 text-green-400" />
-                        ) : (
-                            <ToggleLeft className="w-10 h-10 text-gray-600" />
-                        )}
-                    </button>
-                  </div>
-                  
-                  <div className="space-y-3">
-                      {!isSimulationMode && (
-                        <div className="bg-blue-900/20 p-3 rounded-lg border border-blue-500/30 text-xs text-blue-200 mb-4 flex items-start gap-2">
-                            <Wallet className="w-4 h-4 shrink-0 mt-0.5" />
-                            This will attempt to connect to your real browser wallet (e.g. MetaMask) on BNB Chain.
-                        </div>
-                      )}
-
-                      {isConnecting ? (
-                        <div className="py-10 flex flex-col items-center justify-center text-gray-400">
-                           <Loader2 className="w-10 h-10 animate-spin text-yellow-500 mb-3" />
-                           <p>{isSimulationMode ? 'Simulating Connection...' : 'Waiting for Wallet...'}</p>
-                        </div>
-                      ) : (
-                        Object.values(ChainType).map((chain) => (
-                            <button
-                                key={chain}
-                                onClick={() => handleConnect(chain)}
-                                disabled={!isSimulationMode && chain !== ChainType.BNB} // Only BNB implemented for Real Mode first
-                                className={`w-full p-4 bg-dark hover:bg-slate-800 border border-gray-700 hover:border-yellow-500 rounded-xl flex items-center justify-between group transition-all ${(!isSimulationMode && chain !== ChainType.BNB) ? 'opacity-50 cursor-not-allowed' : ''}`}
-                            >
-                                <div className="flex items-center gap-3">
-                                    <span className="text-2xl">{CHAIN_CONFIG[chain].icon}</span>
-                                    <div className="text-left">
-                                        <div className="font-bold text-white group-hover:text-yellow-400 transition-colors">{chain}</div>
-                                        <div className="text-xs text-gray-500">{CHAIN_CONFIG[chain].walletName}</div>
+  // Render Active Tab
+  const renderContent = () => {
+      switch(activeTab) {
+          case 'forge':
+              return <TokenForge network={wallet.network} isConnected={wallet.isConnected} />;
+          case 'launchpad':
+              return <Launchpad />;
+          default:
+              return (
+                <div className="animate-slideUp space-y-6">
+                    {/* Account Overview */}
+                    {wallet.isConnected && (
+                        <div className="bg-gradient-to-r from-slate-900 to-slate-800 border border-slate-700 p-8 rounded-2xl shadow-2xl relative overflow-hidden">
+                            <div className="absolute top-0 right-0 w-64 h-64 bg-yellow-500/5 rounded-full blur-3xl -mr-16 -mt-16 pointer-events-none"></div>
+                            <div className="flex flex-col md:flex-row md:items-center justify-between gap-6 relative z-10">
+                                <div>
+                                    <div className="flex items-center gap-2 text-slate-400 text-sm font-medium mb-2">
+                                        <ShieldCheck size={16} className="text-green-500" />
+                                        Connected via {wallet.walletType}
+                                    </div>
+                                    <div className="flex items-baseline gap-3">
+                                        <h2 className="text-4xl font-bold text-white">{wallet.balance}</h2>
+                                        <span className="text-xl font-semibold text-yellow-500">
+                                            {wallet.network.includes('bnb') ? 'BNB' : wallet.network.includes('solana') ? 'SOL' : 'TON'}
+                                        </span>
                                     </div>
                                 </div>
-                                <div className="w-4 h-4 rounded-full border border-gray-600 group-hover:bg-yellow-500 group-hover:border-yellow-500 transition-colors"></div>
-                            </button>
-                        ))
-                      )}
-                  </div>
-              </div>
-          </div>
-      )}
-
-      {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-8">
-        {view === ViewState.DASHBOARD && (
-          <div className="space-y-12 animate-fade-in">
-            {/* Stats Section */}
-            <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-yellow-500/10 hover:border-yellow-500/30 transition-colors relative overflow-hidden">
-                 <div className="absolute top-0 right-0 w-32 h-32 bg-yellow-500/5 rounded-full blur-3xl"></div>
-                <h3 className="text-gray-400 text-sm font-medium mb-1">Active Pairs</h3>
-                <p className="text-3xl font-bold text-white relative z-10">{marketTokens.length + 124}</p>
-              </div>
-              <div className="bg-gradient-to-br from-slate-800 to-slate-900 p-6 rounded-2xl border border-orange-500/10 hover:border-orange-500/30 transition-colors relative overflow-hidden">
-                <div className="absolute top-0 right-0 w-32 h-32 bg-orange-500/5 rounded-full blur-3xl"></div>
-                <h3 className="text-gray-400 text-sm font-medium mb-1">24h Volume</h3>
-                <p className="text-3xl font-bold text-white relative z-10">$1.2M</p>
-              </div>
-              <button 
-                onClick={() => setView(ViewState.CREATE_TOKEN)}
-                className="bg-gradient-to-r from-yellow-500 to-orange-600 rounded-2xl p-6 flex flex-col items-center justify-center gap-2 hover:shadow-xl hover:shadow-yellow-500/20 transition-all transform hover:scale-[1.02] group"
-              >
-                <PlusCircle className="w-10 h-10 text-black group-hover:rotate-90 transition-transform" />
-                <span className="font-bold text-black text-lg">Create New Token</span>
-              </button>
-            </div>
-            
-            {/* Search Filter */}
-            <div className="relative z-10">
-                <div className="absolute inset-y-0 left-0 pl-4 flex items-center pointer-events-none">
-                    <Search className="h-5 w-5 text-gray-400" />
-                </div>
-                <input
-                    type="text"
-                    className="block w-full pl-12 pr-4 py-4 border border-gray-800 rounded-xl bg-card/50 text-gray-100 placeholder-gray-500 focus:outline-none focus:border-yellow-500 focus:ring-1 focus:ring-yellow-500 transition-all shadow-lg"
-                    placeholder="Search tokens by name or symbol..."
-                    value={searchQuery}
-                    onChange={(e) => setSearchQuery(e.target.value)}
-                />
-            </div>
-
-            {/* My Tokens Section */}
-            <div className="pt-8 border-t border-gray-800">
-              <h2 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                <Layers className="w-5 h-5 text-yellow-500" /> Your Assets
-              </h2>
-              
-              {myTokens.length === 0 ? (
-                <div className="bg-card border border-gray-800 rounded-2xl p-12 text-center">
-                  <div className="w-20 h-20 bg-slate-800 rounded-full flex items-center justify-center mx-auto mb-4">
-                    <Layers className="w-10 h-10 text-gray-600" />
-                  </div>
-                  <h3 className="text-lg font-medium text-gray-300">No tokens created yet</h3>
-                  <p className="text-gray-500 mt-2 mb-6">Start by creating your first token on BNB, Solana, or TON with AI assistance.</p>
-                  <button 
-                    onClick={() => setView(ViewState.CREATE_TOKEN)}
-                    className="text-yellow-400 hover:text-yellow-300 font-medium"
-                  >
-                    Create First Token →
-                  </button>
-                </div>
-              ) : (
-                <>
-                    {filteredMyTokens.length > 0 ? (
-                        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-                        {filteredMyTokens.map((token) => (
-                            <div key={token.id} className="bg-card border border-gray-700 rounded-xl p-6 hover:border-yellow-500/50 transition-colors group relative overflow-hidden shadow-lg">
-                            <div className={`absolute top-0 right-0 px-2 py-1 text-[10px] font-bold rounded-bl-lg border-l border-b border-gray-700 ${
-                                token.networkMode === NetworkMode.MAINNET 
-                                ? 'bg-yellow-500/20 text-yellow-400' 
-                                : 'bg-gray-700 text-gray-400'
-                            }`}>
-                                {token.networkMode}
-                            </div>
-                            <div className="flex items-center gap-4 mb-4">
-                                <div className="w-12 h-12 rounded-full bg-slate-800 overflow-hidden flex items-center justify-center border border-gray-700 group-hover:border-yellow-500/30 transition-colors">
-                                {token.logoUrl ? <img src={token.logoUrl} className="w-full h-full object-cover" /> : token.symbol[0]}
-                                </div>
-                                <div>
-                                <h4 className="font-bold text-white group-hover:text-yellow-400 transition-colors">{token.name}</h4>
-                                <span className="text-xs bg-slate-700 px-2 py-0.5 rounded text-gray-300">{token.symbol}</span>
+                                <div className="flex gap-3">
+                                    <button className="flex-1 md:flex-none px-6 py-3 bg-yellow-500 hover:bg-yellow-400 text-slate-900 rounded-xl font-bold transition-colors shadow-lg shadow-yellow-500/10">
+                                        Buy KUBA
+                                    </button>
+                                    <button className="flex-1 md:flex-none px-6 py-3 bg-slate-800 hover:bg-slate-700 text-white rounded-xl font-bold transition-colors border border-slate-700">
+                                        Send
+                                    </button>
                                 </div>
                             </div>
-                            
-                            <div className="mb-4">
-                                <TokenQualityBadge token={token} />
-                            </div>
-
-                            <div className="space-y-2 text-sm text-gray-400 mb-6 border-t border-gray-800 pt-3">
-                                <div className="flex justify-between">
-                                <span>Chain</span>
-                                <span className="text-gray-200">{token.chain}</span>
-                                </div>
-                                <div className="flex justify-between">
-                                <span>Supply</span>
-                                <span className="text-gray-200">{token.supply.toLocaleString()}</span>
-                                </div>
-                            </div>
-                            <button 
-                                onClick={() => handleManageToken(token)}
-                                className="w-full py-2 bg-slate-800 hover:bg-yellow-500 hover:text-black rounded-lg transition-colors font-medium text-sm border border-slate-600 hover:border-yellow-500"
-                            >
-                                Manage Token
-                            </button>
-                            </div>
-                        ))}
-                        </div>
-                    ) : (
-                         <div className="text-center py-8 text-gray-500 border border-dashed border-gray-800 rounded-xl">
-                            No created tokens found matching "{searchQuery}"
                         </div>
                     )}
-                </>
-              )}
+
+                    <HeroStats data={MOCK_TOKEN_DATA} />
+
+                    <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                        <div className="lg:col-span-2">
+                            <ChartArea />
+                        </div>
+                        <div className="lg:col-span-1">
+                            <Transactions 
+                                transactions={transactions} 
+                                isConnected={wallet.isConnected} 
+                                network={wallet.network}
+                            />
+                        </div>
+                    </div>
+                </div>
+              );
+      }
+  };
+
+  return (
+    <div className="min-h-screen flex flex-col bg-slate-950 bg-[radial-gradient(ellipse_at_top,_var(--tw-gradient-stops))] from-slate-900 via-slate-950 to-black text-slate-200 font-sans selection:bg-yellow-500/30">
+      
+      <Navbar 
+        address={wallet.address} 
+        network={wallet.network}
+        isConnecting={wallet.isConnecting} 
+        activeTab={activeTab}
+        onConnect={handleConnect}
+        onDisconnect={handleDisconnect}
+        onNetworkChange={handleNetworkChange}
+        onTabChange={setActiveTab}
+      />
+
+      <main className="flex-grow container mx-auto px-4 sm:px-6 lg:px-8 py-8 max-w-7xl">
+        
+        {/* Error Banner */}
+        {wallet.error && (
+          <div className="mb-6 bg-red-500/10 border border-red-500/20 text-red-400 p-4 rounded-xl flex items-center gap-3 animate-slideUp shadow-lg shadow-red-900/10">
+            <AlertCircle size={20} />
+            <span className="font-medium">{wallet.error}</span>
+             {wallet.error.includes('not found') && !isMobileDevice() && (
+                <a 
+                    href={wallet.network.includes('bnb') ? "https://metamask.io/download/" : wallet.network.includes('solana') ? "https://phantom.app/download" : "https://tonkeeper.com/"} 
+                    target="_blank" 
+                    rel="noreferrer"
+                    className="ml-auto text-sm underline hover:text-white flex items-center gap-1"
+                >
+                    Install <ExternalLink size={12} />
+                </a>
+            )}
+            <button onClick={() => setWallet(prev => ({...prev, error: null}))} className="ml-auto hover:text-white p-1">✕</button>
+          </div>
+        )}
+
+        {/* Landing Hero (Disconnected) */}
+        {!wallet.isConnected && activeTab === 'dashboard' ? (
+          <div className="text-center py-16 md:py-24 animate-slideUp relative">
+             <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 w-[600px] h-[600px] bg-yellow-500/5 rounded-full blur-3xl pointer-events-none"></div>
+             
+             <div className="inline-flex items-center gap-2 px-3 py-1 rounded-full bg-orange-500/10 border border-orange-500/20 text-orange-400 text-xs font-bold uppercase tracking-wide mb-6 animate-bounce">
+                <BrainCircuit size={12} /> Powered by Local AI
+             </div>
+             
+            <h1 className="text-5xl md:text-7xl font-extrabold mb-6 text-white tracking-tight relative z-10">
+              Forge the Future of <br/>
+              <span className="text-transparent bg-clip-text bg-gradient-to-r from-yellow-400 to-orange-500">Web3 Assets</span>
+            </h1>
+            <p className="text-slate-400 max-w-2xl mx-auto text-lg md:text-xl mb-10 leading-relaxed relative z-10">
+              The all-in-one platform to mint tokens, audit contracts, and launch presales on BNB, Solana, and TON.
+            </p>
+            <div className="flex flex-col sm:flex-row items-center justify-center gap-4 relative z-10">
+                <button 
+                    onClick={handleConnect}
+                    className="w-full sm:w-auto bg-gradient-to-r from-yellow-500 to-orange-600 text-slate-900 px-8 py-4 rounded-xl font-bold text-lg shadow-xl shadow-orange-500/20 transition-all hover:-translate-y-1 hover:shadow-orange-500/40"
+                >
+                    Launch App
+                </button>
+                <button 
+                    onClick={() => setActiveTab('forge')}
+                    className="w-full sm:w-auto px-8 py-4 rounded-xl font-bold text-white border border-slate-700 hover:bg-slate-800 transition-all"
+                >
+                    Explore Forge
+                </button>
+            </div>
+            
+            <div className="mt-16 grid grid-cols-2 md:grid-cols-4 gap-8 max-w-4xl mx-auto border-t border-slate-800 pt-8 opacity-70">
+                <div>
+                    <div className="text-3xl font-bold text-white">BNB</div>
+                    <div className="text-xs text-slate-500 mt-1">Smart Chain</div>
+                </div>
+                <div>
+                    <div className="text-3xl font-bold text-white">SOL</div>
+                    <div className="text-xs text-slate-500 mt-1">Solana</div>
+                </div>
+                <div>
+                    <div className="text-3xl font-bold text-white">TON</div>
+                    <div className="text-xs text-slate-500 mt-1">The Open Network</div>
+                </div>
+                 <div>
+                    <div className="text-3xl font-bold text-white">Safe</div>
+                    <div className="text-xs text-slate-500 mt-1">AI Validator</div>
+                </div>
             </div>
           </div>
+        ) : (
+            renderContent()
         )}
 
-        {view === ViewState.CREATE_TOKEN && (
-          <div>
-            <button onClick={() => setView(ViewState.DASHBOARD)} className="mb-6 text-gray-400 hover:text-yellow-400 flex items-center gap-1 transition-colors">
-              ← Back to Dashboard
-            </button>
-            <TokenCreator onTokenCreated={handleTokenCreated} />
-          </div>
-        )}
-
-        {view === ViewState.MANAGE_TOKEN && selectedToken && (
-          <ManageToken 
-            token={selectedToken} 
-            onBack={() => setView(ViewState.DASHBOARD)} 
-            onUpdateToken={handleUpdateToken}
-            walletAddress={walletAddress}
-          />
-        )}
-
-        {view === ViewState.LAUNCHPAD && (
-            <Launchpad 
-                myTokens={myTokens} 
-                launchpads={launchpads} 
-                onCreateLaunchpad={handleCreateLaunchpad} 
-            />
-        )}
-
-        {view === ViewState.TRADE && (
-            <TradeInterface />
-        )}
       </main>
 
-      <AiAssistant contextHint={getContextHint()} />
+      <footer className="border-t border-slate-900/50 bg-black/20 py-8 mt-auto backdrop-blur-sm">
+        <div className="container mx-auto px-4 flex flex-col md:flex-row justify-between items-center gap-4 text-slate-500 text-sm">
+          <p>&copy; 2024 KUBA Forge Ai. All rights reserved.</p>
+          <div className="flex gap-6">
+             <a href="#" className="hover:text-yellow-400 transition-colors">Documentation</a>
+             <a href="#" className="hover:text-yellow-400 transition-colors">Audits</a>
+             <a href="#" className="hover:text-yellow-400 transition-colors">GitHub</a>
+          </div>
+        </div>
+      </footer>
     </div>
   );
-}
+};
 
 export default App;
