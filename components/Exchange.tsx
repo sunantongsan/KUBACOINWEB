@@ -1,6 +1,6 @@
 
 import React, { useState, useEffect } from 'react';
-import { ArrowDownUp, Droplets, Settings, Wallet, ArrowDown, Copy, Check, Info, Plus, Flame, CheckCircle, X, ExternalLink, Loader2, AlertCircle, Lock } from 'lucide-react';
+import { ArrowDownUp, Droplets, Settings, Wallet, ArrowDown, Copy, Check, Info, Plus, Flame, CheckCircle, X, ExternalLink, Loader2, AlertCircle, Lock, Zap } from 'lucide-react';
 import { KUBA_LOGO_URL, PLATFORM_FEES } from '../types';
 import { BlockchainService } from '../services/blockchain';
 
@@ -70,6 +70,18 @@ export const Exchange: React.FC<ExchangeProps> = ({ walletAddress }) => {
     navigator.clipboard.writeText(kubaTonAddress);
     setCopied(true);
     setTimeout(() => setCopied(false), 2000);
+  };
+
+  const handleQuickBuy = () => {
+    setActiveTab('swap');
+    setInputAmount('1');
+    // Smooth scroll to the swap card area
+    const swapCard = document.getElementById('swap-interface');
+    if (swapCard) {
+      swapCard.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    } else {
+      window.scrollTo({ top: 200, behavior: 'smooth' });
+    }
   };
 
   const outputAmount = inputAmount ? (parseFloat(inputAmount) * 850.5).toFixed(2) : '';
@@ -180,11 +192,15 @@ export const Exchange: React.FC<ExchangeProps> = ({ walletAddress }) => {
               </div>
             </div>
           </div>
-          <div className="text-right">
-             <div className="text-sm text-slate-400">Official Contract</div>
-             <div className="text-xs text-slate-500 break-all font-mono mt-1 max-w-[200px] hidden md:block">
-               {kubaTonAddress}
-             </div>
+          <div className="flex flex-col items-end gap-2">
+             <div className="text-sm text-slate-400 hidden md:block">Official Contract</div>
+             <button 
+                onClick={handleQuickBuy}
+                className="bg-gradient-to-r from-green-500 to-emerald-600 hover:from-green-400 hover:to-emerald-500 text-white font-bold py-2 px-6 rounded-xl shadow-lg shadow-green-900/20 transition-all flex items-center gap-2 animate-pulse hover:scale-105"
+             >
+               <Zap size={18} fill="currentColor" />
+               Buy KUBA (1 BNB)
+             </button>
           </div>
         </div>
       </div>
@@ -206,7 +222,7 @@ export const Exchange: React.FC<ExchangeProps> = ({ walletAddress }) => {
         </div>
       </div>
 
-      <div className="max-w-md mx-auto">
+      <div className="max-w-md mx-auto" id="swap-interface">
         {activeTab === 'swap' ? (
           <div className="bg-slate-800/80 backdrop-blur-xl border border-slate-700 rounded-2xl p-4 shadow-2xl relative overflow-hidden">
             {/* Background glow */}
