@@ -1,3 +1,4 @@
+
 import React from 'react';
 import { AreaChart, Area, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
@@ -56,7 +57,6 @@ export const ChartArea: React.FC = () => {
             <YAxis 
                 stroke="#94a3b8" 
                 tick={{fontSize: 12}}
-                domain={['dataMin - 0.05', 'dataMax + 0.05']}
                 axisLine={false}
                 tickLine={false}
                 tickFormatter={(val) => `$${val}`}
@@ -64,7 +64,9 @@ export const ChartArea: React.FC = () => {
             <Tooltip 
                 contentStyle={{ backgroundColor: '#1e293b', borderColor: '#334155', color: '#f8fafc' }}
                 itemStyle={{ color: '#818cf8' }}
-                formatter={(value: number) => [`$${value}`, 'Price']}
+                formatter={(value: number) => {
+                  return [`$${value}`, 'Price'];
+                }}
             />
             <Area 
                 type="monotone" 

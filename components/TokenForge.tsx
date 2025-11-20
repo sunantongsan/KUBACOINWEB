@@ -80,8 +80,10 @@ export const TokenForge: React.FC<TokenForgeProps> = ({ network, isConnected }) 
   };
 
   const handleFileChange = (event: React.ChangeEvent<HTMLInputElement>) => {
-    const file = event.target.files?.[0];
-    if (!file) return;
+    const files = event.target.files;
+    if (!files || !files[0]) return;
+    
+    const file = files[0];
     if (!['image/jpeg', 'image/png'].includes(file.type)) {
       setError('Only JPG and PNG files are allowed.');
       return;
@@ -135,10 +137,27 @@ export const TokenForge: React.FC<TokenForgeProps> = ({ network, isConnected }) 
             setVerifyLink(`${explorerBase}/verifyContract?a=${contractAddress}`);
             setSuccess(`Successfully forged ${formState.name}! Contract Address: ${contractAddress}`);
         } else {
+             // SIMULATION FOR NON-EVM
              await new Promise(resolve => setTimeout(resolve, 2000));
-             setSuccess(`Successfully forged ${formState.name} on ${network}! (Simulation)`);
+             
+             let mockAddress = "";
+             if (network.includes('ton')) {
+                 // Generate realistic looking TON address
+                 mockAddress = "EQD" + Math.random().toString(36).substring(2, 15).toUpperCase() + Math.random().toString(36).substring(2, 15).toUpperCase();
+             } else {
+                 mockAddress = "So" + Math.random().toString(36).substring(2, 15) + "...";
+             }
+
+             setSuccess(`Successfully forged ${formState.name} on ${network}! Address: ${mockAddress} (Simulation)`);
+             
              if (network === 'ton-testnet') {
-                setVerifyLink(`https://testnet.tonviewer.com/kQD8StgTQXMJ6adXU3xT7k0aJ_jGf9vPj_5hJ6f1d5x8Q2e_`);
+                setVerifyLink(`https://testnet.tonviewer.com/${mockAddress}`);
+             } else if (network === 'ton') {
+                setVerifyLink(`https://tonviewer.com/${mockAddress}`);
+             } else if (network.includes('solana')) {
+                 // Just a placeholder for Solana
+                 const cluster = network === 'solana-devnet' ? '?cluster=devnet' : '';
+                 setVerifyLink(`https://solscan.io/token/${mockAddress}${cluster}`);
              }
         }
     } catch (err: any) {
@@ -151,6 +170,20 @@ export const TokenForge: React.FC<TokenForgeProps> = ({ network, isConnected }) 
 
   const handleManageAction = async (action: 'burn' | 'renounce') => {
       if(!isConnected || !manageState.tokenAddress) return;
+
+      // Confirmation Checks
+      if (action === 'burn') {
+          if (!manageState.amount || parseFloat(manageState.amount) <= 0) {
+              setError("Please enter a valid amount to burn.");
+              return;
+          }
+          const confirmBurn = window.confirm(`Are you sure you want to BURN ${manageState.amount} tokens? This action is irreversible and destroys tokens forever.`);
+          if (!confirmBurn) return;
+      } else {
+          const confirmRenounce = window.confirm("DANGER: Are you sure you want to RENOUNCE OWNERSHIP? You will lose all control over the token contract (cannot mint, pause, or blacklist anymore). This cannot be undone.");
+          if (!confirmRenounce) return;
+      }
+
       setIsProcessing(true);
       setSuccess(null);
       setError(null);
@@ -172,24 +205,34 @@ export const TokenForge: React.FC<TokenForgeProps> = ({ network, isConnected }) 
               const contract = new ethers.Contract(manageState.tokenAddress, BEP20_ABI, signer);
               
               if(action === 'burn') {
-                  // Standard Burn: Transfer to Dead Address
-                  const burnAmount = ethers.parseUnits(manageState.amount, 18); // Assuming 18 decimals or needs fetch
-                  const deadAddress = "0x000000000000000000000000000000000000dEaD";
-                  const tx = await contract.transfer(deadAddress, burnAmount);
+                  // Fetch decimals to ensure correct burning
+                  let decimals = 18;
+                  try {
+                      decimals = await contract.decimals();
+                  } catch (e) {
+                      console.warn("Could not fetch decimals, defaulting to 18");
+                  }
+
+                  const burnAmount = ethers.parseUnits(manageState.amount, decimals);
+                  
+                  // Execute Burn
+                  const tx = await contract.burn(burnAmount);
                   await tx.wait(1);
                   setSuccess(`Successfully burned ${manageState.amount} tokens!`);
               } else {
                   // Renounce
                   const tx = await contract.renounceOwnership();
                   await tx.wait(1);
-                  setSuccess(`Successfully renounced ownership!`);
+                  setSuccess(`Successfully renounced ownership! Contract is now trustless.`);
               }
           } else {
+              // Simulation for other chains
               await new Promise(resolve => setTimeout(resolve, 2000));
               setSuccess(`${action === 'burn' ? 'Burn' : 'Renounce'} successful on ${network} (Simulation)`);
           }
       } catch (err: any) {
-          setError(err.message || "Action failed");
+          console.error(err);
+          setError(err.message || "Action failed. Ensure you are the owner and have enough tokens.");
       } finally {
           setIsProcessing(false);
       }

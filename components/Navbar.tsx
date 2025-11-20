@@ -1,5 +1,5 @@
 import React from 'react';
-import { Wallet, Menu, X, LogOut, ChevronDown, Hammer, Rocket, LayoutDashboard } from 'lucide-react';
+import { Wallet, Menu, X, LogOut, ChevronDown, Hammer, Rocket, LayoutDashboard, ArrowRightLeft } from 'lucide-react';
 import { formatAddress } from '../services/walletService';
 import { NetworkId } from '../types';
 
@@ -13,6 +13,15 @@ interface NavbarProps {
   onNetworkChange: (net: NetworkId) => void;
   onTabChange: (tab: string) => void;
 }
+
+const SUPPORTED_NETWORKS: NetworkId[] = [
+  'bnb-mainnet', 
+  'bnb-testnet', 
+  'solana', 
+  'solana-devnet', 
+  'ton', 
+  'ton-testnet'
+];
 
 export const Navbar: React.FC<NavbarProps> = ({ 
   address, 
@@ -115,8 +124,9 @@ export const Navbar: React.FC<NavbarProps> = ({
 
           {/* Desktop Menu */}
           <div className="hidden md:flex items-center space-x-1">
-            <NavItem id="dashboard" label="DEX Dashboard" icon={LayoutDashboard} />
-            <NavItem id="forge" label="Token Forge" icon={Hammer} />
+            <NavItem id="dashboard" label="Dashboard" icon={LayoutDashboard} />
+            <NavItem id="trade" label="Trade" icon={ArrowRightLeft} />
+            <NavItem id="forge" label="Forge" icon={Hammer} />
             <NavItem id="launchpad" label="Launchpad" icon={Rocket} />
           </div>
 
@@ -137,7 +147,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 {isNetworkMenuOpen && (
                     <div className="absolute right-0 mt-2 w-48 bg-slate-900 border border-slate-700 rounded-xl shadow-xl overflow-hidden z-50">
                         <div className="p-1">
-                            {(['bnb-mainnet', 'bnb-testnet', 'solana', 'solana-devnet', 'ton', 'ton-testnet'] as NetworkId[]).map((net) => (
+                            {SUPPORTED_NETWORKS.map((net) => (
                                 <button
                                     key={net}
                                     onClick={() => {
@@ -175,7 +185,7 @@ export const Navbar: React.FC<NavbarProps> = ({
                 className="bg-gradient-to-r from-yellow-500 to-orange-600 hover:from-yellow-400 hover:to-orange-500 text-slate-900 px-5 py-2 rounded-lg text-sm font-bold transition-all flex items-center gap-2 shadow-lg shadow-orange-500/20 transform hover:scale-105 active:scale-95 disabled:opacity-50 disabled:cursor-not-allowed"
               >
                 <Wallet size={18} />
-                {isConnecting ? 'Connecting...' : 'Connect Wallet'}
+                {isConnecting ? 'Connect Wallet'}
               </button>
             )}
           </div>
@@ -198,11 +208,12 @@ export const Navbar: React.FC<NavbarProps> = ({
           <div className="px-4 pt-4 pb-6 space-y-3">
              <div className="flex flex-col gap-2">
                 <button onClick={() => onTabChange('dashboard')} className="text-left text-slate-300 p-2">Dashboard</button>
+                <button onClick={() => onTabChange('trade')} className="text-left text-slate-300 p-2">Trade</button>
                 <button onClick={() => onTabChange('forge')} className="text-left text-slate-300 p-2">Token Forge</button>
                 <button onClick={() => onTabChange('launchpad')} className="text-left text-slate-300 p-2">Launchpad</button>
              </div>
              <div className="grid grid-cols-2 gap-2 mb-4 mt-4 border-t border-slate-800 pt-4">
-                {(['bnb-mainnet', 'bnb-testnet', 'solana', 'solana-devnet', 'ton', 'ton-testnet'] as NetworkId[]).map((net) => (
+                {SUPPORTED_NETWORKS.map((net) => (
                     <button
                         key={net}
                         onClick={() => {
